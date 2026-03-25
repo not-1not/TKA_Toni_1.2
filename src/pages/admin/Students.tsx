@@ -102,7 +102,7 @@ const Students = () => {
           </h1>
           <p className="text-sm text-text-muted font-bold mt-1">Manage student access and view histories</p>
         </div>
-        <button onClick={() => setShowForm(true)} className="btn btn-secondary shadow-sm w-full md:w-auto">
+        <button onClick={() => setShowForm(true)} className="btn bg-secondary hover:bg-secondary/90 text-white shadow-sm w-full md:w-auto">
           <Plus size={20} /> Add Student
         </button>
       </div>
@@ -184,7 +184,7 @@ const Students = () => {
               />
             </div>
 
-            <button type="submit" className="btn btn-secondary md:col-span-2 text-white text-lg py-3 mt-4">
+            <button type="submit" className="btn bg-secondary hover:bg-secondary/90 md:col-span-2 text-white text-lg py-3 mt-4">
               {editingId ? 'Update Account' : 'Save Account'}
             </button>
           </form>
