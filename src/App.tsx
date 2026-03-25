@@ -2,6 +2,7 @@ import React, { lazy, Suspense } from 'react';
 import { createBrowserRouter, RouterProvider, Navigate, Outlet } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 
+// Lazy pages
 const StudentLogin = lazy(() => import('./pages/student/Login'));
 const Instruction = lazy(() => import('./pages/student/Instruction'));
 const Exam = lazy(() => import('./pages/student/Exam'));
@@ -17,6 +18,7 @@ const AdminResults = lazy(() => import('./pages/admin/Results'));
 const AdminImport = lazy(() => import('./pages/admin/Import'));
 const Monitor = lazy(() => import('./pages/admin/Monitor'));
 
+// 🔐 Protected routes
 const ProtectedStudentRoute = ({ children }: { children: React.ReactNode }) => {
   const { auth } = useAuth();
   if (!auth.student) return <Navigate to="/login" replace />;
@@ -29,6 +31,7 @@ const ProtectedAdminRoute = ({ children }: { children: React.ReactNode }) => {
   return <>{children}</>;
 };
 
+// 🧱 Layout
 const Layout = () => (
   <div className="app-container">
     <main className="main-content">
@@ -39,17 +42,21 @@ const Layout = () => (
   </div>
 );
 
+// 🚀 Router (FIX: TANPA basename)
 const router = createBrowserRouter([
   {
     element: <Layout />,
     children: [
       { path: "/", element: <Navigate to="/login" replace /> },
+
+      // Student
       { path: "/login", element: <StudentLogin /> },
       { path: "/instructions", element: <ProtectedStudentRoute><Instruction /></ProtectedStudentRoute> },
       { path: "/exam", element: <ProtectedStudentRoute><Exam /></ProtectedStudentRoute> },
       { path: "/review", element: <ProtectedStudentRoute><Review /></ProtectedStudentRoute> },
       { path: "/result", element: <ProtectedStudentRoute><Result /></ProtectedStudentRoute> },
 
+      // Admin
       { path: "/admin", element: <Navigate to="/admin/login" replace /> },
       { path: "/admin/login", element: <AdminLogin /> },
       { path: "/admin/dashboard", element: <ProtectedAdminRoute><AdminDashboard /></ProtectedAdminRoute> },
@@ -63,7 +70,7 @@ const router = createBrowserRouter([
   }
 ]);
 
-
+// 🧩 App root
 function App() {
   return (
     <AuthProvider>
