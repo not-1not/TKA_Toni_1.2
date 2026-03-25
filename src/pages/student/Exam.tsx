@@ -177,7 +177,7 @@ const Exam = () => {
     }
   }
 
-  if (!examState || !tokenInfo || (questions.length === 0 && !isSyncing)) {
+  if (!examState || !tokenInfo || (questions.length === 0 && (isSyncing || !auth.student))) {
     return (
       <div className="flex flex-col items-center justify-center h-screen bg-neutral-50 gap-4">
         <div className="animate-spin rounded-full h-12 w-12 border-b-4 border-blue-500"></div>
@@ -186,7 +186,30 @@ const Exam = () => {
     );
   }
 
+  // Handle case where questions are actually missing after load
+  if (questions.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center h-screen bg-neutral-50 gap-4 p-8 text-center">
+        <AlertTriangle size={48} className="text-amber-500" />
+        <h2 className="text-2xl font-bold text-neutral-800">No Questions Found</h2>
+        <p className="text-neutral-600 max-w-md">The exam session was initialized but no questions were found for the selected subject. Please contact your administrator.</p>
+        <button onClick={() => navigate('/instructions')} className="mt-4 px-6 py-2 bg-blue-600 text-white rounded-lg font-bold">Back to Instructions</button>
+      </div>
+    );
+  }
+
   const currentQ = questions[currentIndex];
+  
+  // Guard against undefined currentQ
+  if (!currentQ) {
+    return (
+      <div className="flex flex-col items-center justify-center h-screen bg-neutral-50 gap-4">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-4 border-blue-500"></div>
+        <p className="text-lg text-neutral-600">Preparing question {currentIndex + 1}...</p>
+      </div>
+    );
+  }
+
   const selectedAns = examState.answers[currentQ.id];
   const isDoubt = examState.doubt[currentQ.id] || false;
 
