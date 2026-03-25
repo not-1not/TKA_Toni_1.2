@@ -3,5 +3,5 @@ import react from '@vitejs/plugin-react'
 
 export default defineConfig(({ mode }) => ({
   plugins: [react()],
-  base: mode === 'production' ? './' : '/',
+  base: process.env.VERCEL ? '/' : (mode === 'production' ? '/TKA_Toni/' : '/'),
 }))
