@@ -61,7 +61,7 @@ const router = createBrowserRouter([
       { path: "/admin/results", element: <ProtectedAdminRoute><AdminResults /></ProtectedAdminRoute> },
     ]
   }
-], { basename: "/TKA_2026" });
+], { basename: import.meta.env.BASE_URL });
 
 
 function App() {
