@@ -17,6 +17,7 @@ const Exam = () => {
   const [timeLeft, setTimeLeft] = useState(0);
   const [fontSize, setFontSize] = useState(20);
   const [showSidebar, setShowSidebar] = useState(false);
+  const questionRef = React.useRef<HTMLDivElement>(null);
 
   const blocker = useBlocker(
     ({ currentLocation, nextLocation }) =>
@@ -57,6 +58,12 @@ const Exam = () => {
     const orderedQs = activeState.questionOrder.map(id => allQs.find(q => q.id === id)).filter(Boolean) as Question[];
     setQuestions(orderedQs);
   }, [auth.student, navigate]);
+
+  useEffect(() => {
+    if (questionRef.current) {
+      questionRef.current.style.fontSize = `${fontSize}px`;
+    }
+  }, [fontSize, currentIndex]);
 
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -335,8 +342,8 @@ const Exam = () => {
             </div>
 
             <div
+              ref={questionRef}
               className="mb-4 sm:mb-6 leading-relaxed font-medium text-neutral-800 whitespace-pre-wrap"
-              style={{ fontSize: `${fontSize}px` }}
             >
               {currentQ.question}
             </div>

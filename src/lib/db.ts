@@ -177,6 +177,50 @@ export const api = {
     if (!isFirstRun && !force) return;
 
     try {
+      let uniqueQuestions: Question[] = [];
+      let supabaseSuccess = false;
+
+      // Try Supabase first
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      
+      if (supabaseUrl && supabaseKey) {
+        import('@supabase/supabase-js').then(async ({ createClient }) => {
+           try {
+              const supabase = createClient(supabaseUrl, supabaseKey);
+              const { data, error } = await supabase.from('questions').select('*');
+              
+              if (!error && data && data.length > 0) {
+                 const mappedQuestions = data.map((q: any) => {
+                    const options = q.options || [];
+                    const answerIndex = options.indexOf(q.answer);
+
+                    return {
+                      id: q.id || 'Q-' + Math.random().toString(36).substring(2, 9),
+                      subject: q.subject || 'Umum',
+                      question: q.question,
+                      type: 'pilihan_ganda',
+                      option_a: options[0] || '',
+                      option_b: options[1] || '',
+                      option_c: options[2] || '',
+                      option_d: options[3] || '',
+                      correct_answer: (['A', 'B', 'C', 'D'][answerIndex] || 'A') as any
+                    } as Question;
+                  });
+                  
+                  api.setQuestions(mappedQuestions);
+                  console.log('Database initialized from Supabase');
+                  supabaseSuccess = true;
+                  localStorage.setItem('db_initialized', 'true');
+           }
+           } catch(e) {
+             console.warn("Supabase fetch failed", e);
+           }
+        });
+      }
+
+      // If Supabase is being loaded asynchronously, we might still want to load local fallbacks just in case
+      // For simplicity, we also run the fallback loader if forcing or if supabase hasn't succeeded yet
       const [questionsJson, students, results, tokens] = await Promise.all([
         fetch('/database/questions.json').then(res => res.json()).catch(() => []),
         fetch('/database/students.json').then(res => res.json()).catch(() => []),
@@ -193,9 +237,7 @@ export const api = {
            const parsed = api.parseQuestionCSV(biCsv);
            allQuestions = [...allQuestions, ...parsed];
         }
-      } catch (e) {
-        console.warn('BI CSV not found or invalid');
-      }
+      } catch (e) {}
 
       // Try to fetch MTK CSV if it exists
       try {
@@ -204,20 +246,18 @@ export const api = {
            const parsed = api.parseQuestionCSV(mtkCsv);
            allQuestions = [...allQuestions, ...parsed];
         }
-      } catch (e) {
-        console.warn('MTK CSV not found or invalid');
-      }
+      } catch (e) {}
 
       // Deduplicate by question text (simple way)
-      const uniqueQuestions = Array.from(new Map(allQuestions.map(q => [q.question, q])).values());
+      uniqueQuestions = Array.from(new Map(allQuestions.map(q => [q.question, q])).values());
 
-      if (uniqueQuestions.length) api.setQuestions(uniqueQuestions);
+      if (uniqueQuestions.length && !supabaseSuccess) api.setQuestions(uniqueQuestions);
       if (students && students.length) api.setStudents(students);
       if (results && results.length) setStorage('results', results);
       if (tokens && tokens.length) api.setTokens(tokens);
 
       localStorage.setItem('db_initialized', 'true');
-      console.log('Database initialized from public files');
+      if(!supabaseSuccess) console.log('Database initialized from public files');
     } catch (err) {
       console.error('Failed to initialize database:', err);
     }
