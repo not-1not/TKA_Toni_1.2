@@ -46,7 +46,11 @@ const Instruction = () => {
            ? allQs.filter(q => q.subject === tokenInfo.subject)
            : allQs;
         
-        const shuffled = shuffleArray([...filteredBySubject]).slice(0, tokenInfo.questionCount);
+        const filteredByPackage = tokenInfo.package
+           ? filteredBySubject.filter(q => q.package === tokenInfo.package)
+           : filteredBySubject;
+
+        const shuffled = shuffleArray([...filteredByPackage]).slice(0, tokenInfo.questionCount);
         const questionOrder = shuffled.map(q => q.id);
         const optionOrder: Record<string, ('A'|'B'|'C'|'D')[]> = {};
         shuffled.forEach(q => {

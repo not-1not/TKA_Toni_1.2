@@ -1,32 +1,68 @@
 import React, { useRef } from 'react';
 import { AdminLayout } from './Dashboard';
-import { Download, Upload, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Download, Upload, CheckCircle2, AlertCircle, FileJson, ClipboardType, Table, HelpCircle } from 'lucide-react';
 import { api, Student, Question, Statement } from '../../lib/db';
 
 const Import = () => {
   const questionInputRef = useRef<HTMLInputElement>(null);
   const studentInputRef = useRef<HTMLInputElement>(null);
   const [status, setStatus] = React.useState<{ type: 'success' | 'error' | 'loading', message: string } | null>(null);
+  const [activeTab, setActiveTab] = React.useState<'students' | 'questions'>('students');
+  const [importMode, setImportMode] = React.useState<'file' | 'quick'>('file');
+  const [quickPasteText, setQuickPasteText] = React.useState("");
 
-  const downloadTemplate = (type: 'questions' | 'students') => {
+  const downloadTemplate = (type: 'questions' | 'students', format: 'csv' | 'json' = 'csv') => {
     let headers = '';
     let rows = '';
     let filename = '';
+    let content = '';
 
     if (type === 'questions') {
-      headers = 'subject,question,type,option_a,option_b,option_c,option_d,correct_answer,s1_text,s1_ans,s2_text,s2_ans,s3_text,s3_ans,image';
-      rows = 'IPA,Apa ibu kota Indonesia?,pilihan_ganda,Jakarta,Bandung,Surabaya,Medan,A,,,,,,,https://placehold.co/600x400?text=Jakarta\n' +
-        'IPA,Pernyataan tentang mamalia,pilihan_ganda_kompleks,,,,, ,Bernapas dengan paru-paru,Benar,Memiliki daun telinga,Benar,Bertelur,Salah,\n' +
-        'BI,Kesesuaian tata surya,multiple_choice_multiple_answer,,,,, ,Bumi mengelilingi matahari,Sesuai,Matahari adalah planet,Tidak Sesuai,Pluto adalah planet kerdil,Sesuai,';
-      filename = 'template_soal.csv';
+      if (format === 'csv') {
+        headers = 'package,subject,question,type,option_a,option_b,option_c,option_d,correct_answer,s1_text,s1_ans,s2_text,s2_ans,s3_text,s3_ans,image';
+        rows = 'TO-1,IPA,Apa ibu kota Indonesia?,pilihan_ganda,Jakarta,Bandung,Surabaya,Medan,A,,,,,,,https://placehold.co/600x400?text=Jakarta\n' +
+          'TO-1,IPA,Pernyataan tentang mamalia,pilihan_ganda_kompleks,,,,, ,Bernapas dengan paru-paru,Benar,Memiliki daun telinga,Benar,Bertelur,Salah,\n' +
+          'LATIHAN-A,BI,Kesesuaian tata surya,multiple_choice_multiple_answer,,,,, ,Bumi mengelilingi matahari,Sesuai,Matahari adalah planet,Tidak Sesuai,Pluto adalah planet kerdil,Sesuai,';
+        filename = 'template_soal.csv';
+        content = '\ufeff' + headers + '\n' + rows;
+      } else {
+        const json = [
+          {
+            package: "TO-1",
+            subject: "IPA",
+            question: "Apa ibu kota Indonesia?",
+            type: "pilihan_ganda",
+            option_a: "Jakarta",
+            option_b: "Bandung",
+            option_c: "Surabaya",
+            option_d: "Medan",
+            correct_answer: "A"
+          }
+        ];
+        content = JSON.stringify(json, null, 2);
+        filename = 'template_soal.json';
+      }
     } else {
-      headers = 'username,password,name,school';
-      rows = 'siswa01,pass123,Budi Santoso,SDN 01 Jakarta\nsiswa02,pass123,Siti Aminah,SDN 01 Jakarta';
-      filename = 'template_siswa.csv';
+      if (format === 'csv') {
+        headers = 'username,password,name,school';
+        rows = 'siswa01,pass123,Budi Santoso,SDN 01 Jakarta\nsiswa02,pass123,Siti Aminah,SDN 01 Jakarta';
+        filename = 'template_siswa.csv';
+        content = '\ufeff' + headers + '\n' + rows;
+      } else {
+        const json = [
+          {
+            username: "siswa01",
+            password: "password123",
+            name: "Budi Santoso",
+            school: "SDN 01 Jakarta"
+          }
+        ];
+        content = JSON.stringify(json, null, 2);
+        filename = 'template_siswa.json';
+      }
     }
 
-    const content = headers + '\n' + rows;
-    const blob = new Blob(['\ufeff' + content], { type: 'text/csv;charset=utf-8' });
+    const blob = new Blob([content], { type: format === 'csv' ? 'text/csv;charset=utf-8' : 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.style.display = 'none';
@@ -42,32 +78,32 @@ const Import = () => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    const isJson = file.name.endsWith('.json');
     const reader = new FileReader();
     reader.onload = async (event) => {
       const text = event.target?.result as string;
       setStatus({ type: 'loading', message: 'Memproses file...' });
 
       try {
+        let imported: any[] = [];
         if (type === 'students') {
-          const students = api.parseStudentCSV(text);
+          imported = isJson ? api.parseStudentJSON(text) : api.parseStudentCSV(text);
           const current = await api.getStudents();
-          const all = [...current, ...students];
-          // Deduplicate by username
+          const all = [...current, ...imported];
           const unique = Array.from(new Map(all.map(s => [s.username.toLowerCase(), s])).values());
           await api.setStudents(unique);
-          setStatus({ type: 'success', message: `Berhasil mengimport ${students.length} siswa (Duplikat username diabaikan).` });
+          setStatus({ type: 'success', message: `Berhasil mengimport ${imported.length} siswa.` });
         } else {
-          const questions = api.parseQuestionCSV(text);
+          imported = isJson ? api.parseQuestionJSON(text) : api.parseQuestionCSV(text);
           const current = await api.getQuestions();
-          const all = [...current, ...questions];
-          // Deduplicate by question text
+          const all = [...current, ...imported];
           const unique = Array.from(new Map(all.map(q => [q.question, q])).values());
           await api.setQuestions(unique);
-          setStatus({ type: 'success', message: `Berhasil mengimport ${questions.length} soal (Duplikat otomatis diabaikan).` });
+          setStatus({ type: 'success', message: `Berhasil mengimport ${imported.length} soal.` });
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error(err);
-        setStatus({ type: 'error', message: 'Gagal mengimport file. Pastikan format sesuai template.' });
+        setStatus({ type: 'error', message: err.message || 'Gagal mengimport file. Pastikan format sesuai.' });
       }
 
       if (e.target) e.target.value = '';
@@ -75,100 +111,215 @@ const Import = () => {
     reader.readAsText(file);
   };
 
+  const handleQuickPaste = async () => {
+    if (!quickPasteText.trim()) return;
+    setStatus({ type: 'loading', message: 'Memproses data...' });
+
+    try {
+      let imported: any[] = [];
+      if (activeTab === 'students') {
+        imported = api.parseStudentQuickPaste(quickPasteText);
+        const current = await api.getStudents();
+        const all = [...current, ...imported];
+        const unique = Array.from(new Map(all.map(s => [s.username.toLowerCase(), s])).values());
+        await api.setStudents(unique);
+        setStatus({ type: 'success', message: `Berhasil mengimport ${imported.length} siswa.` });
+      } else {
+        imported = api.parseQuestionQuickPaste(quickPasteText);
+        const current = await api.getQuestions();
+        const all = [...current, ...imported];
+        const unique = Array.from(new Map(all.map(q => [q.question, q])).values());
+        await api.setQuestions(unique);
+        setStatus({ type: 'success', message: `Berhasil mengimport ${imported.length} soal.` });
+      }
+      setQuickPasteText("");
+    } catch (err: any) {
+      console.error(err);
+      setStatus({ type: 'error', message: 'Gagal memproses data paste. Pastikan format benar.' });
+    }
+  };
+
   return (
     <AdminLayout>
-      <div className="flex justify-between items-end mb-8 border-b border-border pb-4">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 border-b border-border pb-4 gap-4">
         <div>
           <h1 className="text-3xl md:text-4xl font-black text-text-main tracking-tight">Import Data</h1>
-          <p className="text-text-muted mt-2 font-medium">Bulk import students or questions from CSV file.</p>
+          <p className="text-text-muted mt-2 font-medium">Bulk import students or questions using various formats.</p>
+        </div>
+        <div className="flex bg-surface p-1 rounded-xl border border-border shadow-sm self-stretch md:self-auto">
+          <button
+            onClick={() => setActiveTab('students')}
+            className={`flex-1 md:flex-none px-6 py-2 rounded-lg font-bold text-sm transition-all ${activeTab === 'students' ? 'bg-primary text-white shadow-md' : 'text-text-muted hover:bg-background'}`}
+          >
+            Siswa
+          </button>
+          <button
+            onClick={() => setActiveTab('questions')}
+            className={`flex-1 md:flex-none px-6 py-2 rounded-lg font-bold text-sm transition-all ${activeTab === 'questions' ? 'bg-secondary text-white shadow-md' : 'text-text-muted hover:bg-background'}`}
+          >
+            Soal
+          </button>
         </div>
       </div>
 
       {status && (
-        <div className={`mb-6 p-4 rounded-xl flex items-center gap-3 animate-fade-in ${status.type === 'success' ? 'bg-secondary/10 text-secondary border border-secondary/20' : 'bg-danger/10 text-danger border border-danger/20'}`}>
-          {status.type === 'success' ? <CheckCircle2 size={24} /> : <AlertCircle size={24} />}
+        <div className={`mb-6 p-4 rounded-xl flex items-center gap-3 animate-fade-in ${status.type === 'success' ? 'bg-secondary/10 text-secondary border border-secondary/20' : status.type === 'loading' ? 'bg-primary/10 text-primary border border-primary/20' : 'bg-danger/10 text-danger border border-danger/20'}`}>
+          {status.type === 'success' ? <CheckCircle2 size={24} /> : status.type === 'loading' ? <div className="w-6 h-6 border-4 border-primary border-t-transparent rounded-full animate-spin"></div> : <AlertCircle size={24} />}
           <span className="font-bold">{status.message}</span>
           <button onClick={() => setStatus(null)} className="ml-auto text-xs uppercase font-black hover:underline">Dismiss</button>
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-        <input
-          type="file"
-          accept=".csv"
-          ref={questionInputRef}
-          className="hidden"
-          title="Upload questions CSV file"
-          aria-label="Upload questions CSV file"
-          onChange={(e) => handleFileUpload(e, 'questions')}
-        />
-        <input
-          type="file"
-          accept=".csv"
-          ref={studentInputRef}
-          className="hidden"
-          title="Upload students CSV file"
-          aria-label="Upload students CSV file"
-          onChange={(e) => handleFileUpload(e, 'students')}
-        />
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Left Column: Import Methods */}
+        <div className="lg:col-span-2 space-y-6">
+          <div className="bg-surface rounded-2xl border border-border shadow-sm overflow-hidden">
+            <div className="flex border-b border-border">
+              <button
+                onClick={() => setImportMode('file')}
+                className={`flex-1 py-4 font-bold text-sm flex items-center justify-center gap-2 transition-colors ${importMode === 'file' ? 'bg-background text-primary border-b-2 border-primary' : 'text-text-muted hover:bg-background/50'}`}
+              >
+                <Upload size={18} /> File Upload (CSV/JSON)
+              </button>
+              <button
+                onClick={() => setImportMode('quick')}
+                className={`flex-1 py-4 font-bold text-sm flex items-center justify-center gap-2 transition-colors ${importMode === 'quick' ? 'bg-background text-primary border-b-2 border-primary' : 'text-text-muted hover:bg-background/50'}`}
+              >
+                <ClipboardType size={18} /> Quick Paste (Easy)
+              </button>
+            </div>
 
-        <div className="card bg-surface p-6 md:p-8 rounded-2xl border border-border shadow-sm flex flex-col items-center justify-center text-center hover:border-primary/50 transition-colors group">
-          <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center text-primary mb-6 group-hover:scale-110 transition-transform">
-            <Upload size={32} />
+            <div className="p-6 md:p-8">
+              {importMode === 'file' ? (
+                <div className="text-center py-8">
+                  <div className={`w-20 h-20 rounded-full mx-auto flex items-center justify-center mb-6 transition-transform hover:scale-110 ${activeTab === 'students' ? 'bg-primary/10 text-primary' : 'bg-secondary/10 text-secondary'}`}>
+                    {activeTab === 'students' ? <Upload size={40} /> : <FileJson size={40} />}
+                  </div>
+                  <h2 className="text-2xl font-bold mb-2">Upload {activeTab === 'students' ? 'Data Siswa' : 'Bank Soal'}</h2>
+                  <p className="text-text-muted mb-8 max-w-md mx-auto">
+                    Pilih file CSV atau JSON yang sesuai dengan format template untuk melakukan import massal.
+                  </p>
+
+                  <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                    <button
+                      onClick={() => (activeTab === 'students' ? studentInputRef : questionInputRef).current?.click()}
+                      className={`btn ${activeTab === 'students' ? 'btn-primary' : 'btn-secondary'} px-8 py-3 shadow-lg flex items-center gap-2`}
+                    >
+                      <Upload size={18} /> Pilih File
+                    </button>
+                  </div>
+
+                  <input
+                    type="file"
+                    accept=".csv,.json"
+                    ref={questionInputRef}
+                    className="hidden"
+                    title="Upload questions file"
+                    aria-label="Upload questions file"
+                    onChange={(e) => handleFileUpload(e, 'questions')}
+                  />
+                  <input
+                    type="file"
+                    accept=".csv,.json"
+                    ref={studentInputRef}
+                    className="hidden"
+                    title="Upload students file"
+                    aria-label="Upload students file"
+                    onChange={(e) => handleFileUpload(e, 'students')}
+                  />
+
+                  <div className="mt-8 pt-8 border-t border-border flex flex-wrap justify-center gap-6">
+                    <button onClick={() => downloadTemplate(activeTab, 'csv')} className="flex items-center gap-2 text-sm font-bold text-text-muted hover:text-primary transition-colors">
+                      <Download size={16} /> Template CSV
+                    </button>
+                    <button onClick={() => downloadTemplate(activeTab, 'json')} className="flex items-center gap-2 text-sm font-bold text-text-muted hover:text-primary transition-colors">
+                      <FileJson size={16} /> Template JSON
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  <div className="flex justify-between items-center">
+                    <h2 className="text-xl font-bold">Quick Paste</h2>
+                    <span className="text-xs font-black px-2 py-1 bg-secondary/10 text-secondary rounded uppercase tracking-tighter">Beginner Friendly</span>
+                  </div>
+                  <p className="text-sm text-text-muted">
+                    {activeTab === 'students'
+                      ? "Tempel daftar siswa di bawah. Format: Nama | Sekolah (satu per baris)."
+                      : "Tempel soal pilihan ganda di bawah. Format: Soal | A | B | C | D | Jawaban(A/B/C/D)."}
+                  </p>
+
+                  <textarea
+                    value={quickPasteText}
+                    onChange={(e) => setQuickPasteText(e.target.value)}
+                    placeholder={activeTab === 'students' ? "Contoh:\nBudi Santoso | SDN 01 Jakarta\nSiti Aminah | SDN 02 Jakarta" : "Contoh:\nApa ibu kota Indonesia? | Jakarta | Bandung | Surabaya | Medan | A"}
+                    className="w-full h-64 p-4 rounded-xl bg-background border border-border font-mono text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all resize-none"
+                  />
+
+                  <button
+                    onClick={handleQuickPaste}
+                    disabled={!quickPasteText.trim()}
+                    className={`btn ${activeTab === 'students' ? 'btn-primary' : 'btn-secondary'} w-full py-4 shadow-xl disabled:opacity-50 disabled:cursor-not-allowed`}
+                  >
+                    Proses & Import Sekarang
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
-          <h2 className="text-xl font-bold mb-2">Import Questions</h2>
-          <p className="text-text-muted mb-6 text-sm">Upload a CSV file to bulk add questions to your bank.</p>
-          <button onClick={() => questionInputRef.current?.click()} className="btn btn-primary w-full shadow-lg">Select CSV</button>
-
-          <button onClick={() => downloadTemplate('questions')} className="mt-4 flex items-center justify-center gap-2 text-xs text-primary hover:underline cursor-pointer font-bold">
-            <Download size={14} /> Template (.csv)
-          </button>
         </div>
 
-        <div className="card bg-surface p-6 md:p-8 rounded-2xl border border-border shadow-sm flex flex-col items-center justify-center text-center hover:border-secondary/50 transition-colors group">
-          <div className="w-16 h-16 rounded-full bg-secondary/10 flex items-center justify-center text-secondary mb-6 group-hover:scale-110 transition-transform">
-            <Upload size={32} />
-          </div>
-          <h2 className="text-xl font-bold mb-2">Import Students</h2>
-          <p className="text-text-muted mb-6 text-sm">Upload a valid CSV file containing names and schools.</p>
-          <button onClick={() => studentInputRef.current?.click()} className="btn btn-secondary w-full shadow-lg">Select CSV</button>
+        {/* Right Column: Instructions & Reset */}
+        <div className="space-y-6">
+          <div className="bg-surface p-6 md:p-8 rounded-2xl border border-border shadow-sm">
+            <h3 className="font-bold text-text-main mb-6 flex items-center gap-2">
+              <HelpCircle size={20} className="text-primary" /> Petunjuk Format
+            </h3>
 
-          <button onClick={() => downloadTemplate('students')} className="mt-4 flex items-center justify-center gap-2 text-xs text-secondary hover:underline cursor-pointer font-bold">
-            <Download size={14} /> Template (.csv)
-          </button>
-        </div>
+            <div className="space-y-6">
+              <div>
+                <h4 className="flex items-center gap-2 text-sm font-bold text-primary uppercase tracking-wider mb-2">
+                  <Table size={16} /> CSV Format
+                </h4>
+                <p className="text-xs text-text-muted leading-relaxed">
+                  {activeTab === 'students'
+                    ? "Wajib memiliki header: username, password, name, school."
+                    : "Wajib memiliki 16 kolom sesuai template soal."}
+                </p>
+              </div>
 
-        <div className="card bg-surface p-6 md:p-8 rounded-2xl border border-border shadow-sm flex flex-col items-center justify-center text-center hover:border-danger/50 transition-colors group">
-          <div className="w-16 h-16 rounded-full bg-danger/10 flex items-center justify-center text-danger mb-6 group-hover:scale-110 transition-transform">
-            <AlertCircle size={32} />
-          </div>
-          <h2 className="text-xl font-bold mb-2 text-danger">Reset & Sync</h2>
-          <p className="text-text-muted mb-6 text-sm">Bersihkan cache dan muat ulang bank soal dari file default.</p>
-          <button
-            onClick={() => {
-              if (confirm("PERINGATAN: Semua data (HASIL UJIAN, SISWA, SOAL) di browser ini akan dihapus dan direset ke data awal. Lanjutkan?")) {
-                api.resetDatabase();
-              }
-            }}
-            className="btn bg-danger text-white w-full shadow-lg hover:bg-danger/90"
-          >
-            Reset Database
-          </button>
-        </div>
-      </div>
+              <div>
+                <h4 className="flex items-center gap-2 text-sm font-bold text-secondary uppercase tracking-wider mb-2">
+                  <FileJson size={16} /> JSON Format
+                </h4>
+                <p className="text-xs text-text-muted leading-relaxed">
+                  Format array of objects. Mendukung field {activeTab === 'students' ? "'name', 'school', 'username', 'password'" : "'question', 'option_a', 'option_b', etc"}.
+                </p>
+              </div>
 
-      <div className="mt-12 p-6 bg-background rounded-2xl border border-dashed border-border">
-        <h3 className="font-bold text-text-main mb-4 flex items-center gap-2">
-          <AlertCircle size={18} className="text-warning" /> Petunjuk Import CSV
-        </h3>
-        <div className="grid md:grid-cols-2 gap-8 text-sm">
-          <div>
-            <h4 className="font-bold text-primary mb-2 uppercase tracking-wider text-xs">Format Siswa</h4>
-            <p className="text-text-muted">Gunakan 4 kolom: <strong>username, password, name, school</strong>. Kolom ID akan digenerate otomatis.</p>
+              <div className="p-4 bg-background rounded-xl border border-border">
+                <h4 className="text-xs font-black mb-2 opacity-50 uppercase">Pro Tip</h4>
+                <p className="text-xs font-medium italic">"Gunakan Quick Paste jika Anda hanya ingin menambahkan beberapa data dengan cepat tanpa repot membuat file."</p>
+              </div>
+            </div>
           </div>
-          <div>
-            <h4 className="font-bold text-secondary mb-2 uppercase tracking-wider text-xs">Format Soal</h4>
-            <p className="text-text-muted">Gunakan tipe <strong>pilihan_ganda</strong>, <strong>pilihan_ganda_kompleks</strong>, atau <strong>multiple_choice_multiple_answer</strong>. Kolom ke-15 (image) opsional untuk URL gambar.</p>
+
+          <div className="card bg-surface p-6 md:p-8 rounded-2xl border border-danger/30 shadow-sm flex flex-col items-center justify-center text-center hover:border-danger transition-colors group">
+            <div className="w-16 h-16 rounded-full bg-danger/10 flex items-center justify-center text-danger mb-6 group-hover:scale-110 transition-transform">
+              <AlertCircle size={32} />
+            </div>
+            <h2 className="text-xl font-bold mb-2 text-danger">Reset & Sync</h2>
+            <p className="text-text-muted mb-6 text-sm">Bersihkan cache lokal dan muat ulang database.</p>
+            <button
+              onClick={() => {
+                if (confirm("PERINGATAN: Semua data di browser ini akan dihapus dan direset. Lanjutkan?")) {
+                  api.resetDatabase();
+                }
+              }}
+              className="btn bg-danger text-white w-full shadow-lg hover:bg-danger/90"
+            >
+              Reset Database
+            </button>
           </div>
         </div>
       </div>

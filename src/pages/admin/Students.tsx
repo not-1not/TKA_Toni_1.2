@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { AdminLayout } from './Dashboard';
 import { api, Student } from '../../lib/db';
-import { Plus, Trash2, Edit3, X, Users, Activity, CheckCircle, Clock, Square, CheckSquare, Search } from 'lucide-react';
+import { Plus, Trash2, Edit3, X, Users, Activity, CheckCircle, Clock, Square, CheckSquare, Search, Upload } from 'lucide-react';
 import { AnimatePresence } from 'framer-motion';
 
 const Students = () => {
@@ -16,6 +16,8 @@ const Students = () => {
   const [editingId, setEditingId] = useState<string | null>(null);
   
   const [showHistory, setShowHistory] = useState(false);
+  const [showBulkAdd, setShowBulkAdd] = useState(false);
+  const [bulkText, setBulkText] = useState('');
   const [historyData, setHistoryData] = useState<{student: Student, results: any[]} | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -91,20 +93,46 @@ const Students = () => {
 
   const handleBatchDelete = async () => {
     if (selectedIds.length === 0) return;
-    if (confirm(`Delete ${selectedIds.length} selected students?`)) {
-      setIsLoading(true);
-      try {
-          const remaining = students.filter(s => !selectedIds.includes(s.id));
-          await api.setStudents(remaining);
-          await fetchStudents();
-          setSelectedIds([]);
-      } catch (err) {
-          alert("Failed to delete students");
-      } finally {
-          setIsLoading(false);
-      }
+    if (!confirm(`Are you sure you want to delete ${selectedIds.length} selected student accounts? This action cannot be undone.`)) return;
+
+    setIsLoading(true);
+    try {
+        await api.deleteStudents(selectedIds); // Need to add this to api
+        await fetchStudents();
+        setSelectedIds([]);
+        alert("Students deleted successfully");
+    } catch (err) {
+        alert("Failed to delete students");
+    } finally {
+        setIsLoading(false);
     }
   };
+
+  const handleBulkMoveSchool = async (targetSchool: string) => {
+    if (selectedIds.length === 0) return;
+    if (targetSchool === 'New') {
+      const name = prompt("Enter new school name:");
+      if (!name) return;
+      targetSchool = name;
+    }
+    if (!confirm(`Move ${selectedIds.length} students to school "${targetSchool}"?`)) return;
+
+    setIsLoading(true);
+    try {
+        const selectedStus = students.filter(s => selectedIds.includes(s.id));
+        const updatedStus = selectedStus.map(s => ({ ...s, school: targetSchool }));
+        await api.setStudents(updatedStus);
+        await fetchStudents();
+        setSelectedIds([]);
+        alert("Students updated successfully");
+    } catch (err) {
+        alert("Failed to move students");
+    } finally {
+        setIsLoading(false);
+    }
+  };
+
+  const uniqueSchools = Array.from(new Set(students.map(s => s.school).filter(Boolean)));
 
   const toggleSelectAll = () => {
     if (selectedIds.length === filteredStudents.length) {
@@ -118,6 +146,42 @@ const Students = () => {
     setSelectedIds(prev => 
       prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
     );
+  };
+
+  const handleBulkAdd = async () => {
+    if (!bulkText.trim()) return;
+    setIsLoading(true);
+    try {
+      const lines = bulkText.split('\n').filter(l => l.trim());
+      const newStudents: Student[] = lines.map(line => {
+        // Support tab or comma or semicolon
+        const parts = line.split(/[\t,;]/).map(p => p.trim());
+        const username = parts[0] || '';
+        const name = parts[1] || 'New Student';
+        const school = parts[2] || 'Umum';
+        const password = parts[3] || 'siswa123';
+        
+        return {
+          id: 'STU-' + Math.random().toString(36).substring(2, 9),
+          username,
+          name,
+          school,
+          password
+        };
+      }).filter(s => s.username);
+
+      if (newStudents.length === 0) throw new Error("No valid data found");
+      
+      await api.setStudents(newStudents);
+      await fetchStudents();
+      setShowBulkAdd(false);
+      setBulkText('');
+      alert(`Successfully added ${newStudents.length} students!`);
+    } catch (err: any) {
+      alert("Error: " + err.message);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const onCloseForm = () => {
@@ -135,42 +199,74 @@ const Students = () => {
           </h1>
           <p className="text-sm text-text-muted font-bold mt-1">Manage student access and view histories</p>
         </div>
-        <button onClick={() => setShowForm(true)} className="btn bg-secondary hover:bg-secondary/90 text-white shadow-sm w-full md:w-auto">
-          <Plus size={20} /> Add Student
-        </button>
+        <div className="flex gap-2 w-full md:w-auto mt-4 md:mt-0">
+          <button onClick={() => setShowBulkAdd(true)} className="btn btn-outline border-secondary text-secondary hover:bg-secondary/5 shadow-sm flex-1 md:flex-none">
+            <Upload size={20} /> Bulk Add
+          </button>
+          <button onClick={() => setShowForm(true)} className="btn btn-primary shadow-lg flex-1 md:flex-none">
+            <Plus size={20} /> Add Student
+          </button>
+        </div>
       </div>
 
-      <div className="flex flex-col md:flex-row gap-4 mb-6">
-        <div className="flex-1 relative">
-           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted" size={20} />
-           <input 
-            type="text" 
-            placeholder="Search by name, school, or username..."
-            className="input-field pl-12 bg-surface"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-           />
-        </div>
-        <div className="flex gap-3">
-           <button 
-            onClick={toggleSelectAll} 
-            className="btn btn-outline bg-surface text-text-main border-border text-sm flex items-center gap-2"
-          >
-            {selectedIds.length === filteredStudents.length && filteredStudents.length > 0 ? <CheckSquare size={18} /> : <Square size={18} />}
-            {selectedIds.length === filteredStudents.length && filteredStudents.length > 0 ? 'Deselect All' : 'Select All'}
-          </button>
+      <div className="flex flex-col gap-6 mb-8">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div className="relative w-full sm:w-80">
+             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" size={16} />
+             <input 
+               type="text" 
+               placeholder="Search name, school, or username..."
+               className="input-field pl-9 py-2 text-sm bg-surface"
+               value={searchTerm}
+               onChange={(e) => setSearchTerm(e.target.value)}
+               title="Search students"
+             />
+          </div>
           
-          <AnimatePresence>
-            {selectedIds.length > 0 && (
-              <button 
-                onClick={handleBatchDelete}
-                className="btn bg-danger text-white text-sm flex items-center gap-2 animate-in slide-in-from-right-4"
-              >
-                <Trash2 size={18} /> Delete ({selectedIds.length})
-              </button>
-            )}
-          </AnimatePresence>
+          <div className="flex gap-2 w-full sm:w-auto">
+            <button 
+              onClick={toggleSelectAll} 
+              className="btn btn-outline py-2 px-4 border-border text-sm flex items-center gap-2 bg-surface"
+            >
+              {selectedIds.length === filteredStudents.length && filteredStudents.length > 0 ? <CheckSquare size={16} /> : <Square size={16} />}
+              <span className="hidden sm:inline">{selectedIds.length === filteredStudents.length && filteredStudents.length > 0 ? 'Deselect All' : 'Select All'}</span>
+            </button>
+          </div>
         </div>
+
+        {/* Bulk Actions Bar */}
+        <AnimatePresence>
+          {selectedIds.length > 0 && (
+            <div className="flex items-center gap-4 p-4 bg-secondary/5 border-2 border-secondary/20 rounded-xl relative overflow-hidden animate-in slide-in-from-top-4">
+               <div className="absolute top-0 left-0 w-1 h-full bg-secondary" />
+               <span className="text-sm font-black text-secondary uppercase tracking-widest">{selectedIds.length} Selected</span>
+               <div className="h-6 w-[2px] bg-secondary/20 mx-2" />
+               <div className="flex gap-2 flex-wrap flex-1">
+                  <select 
+                    onChange={(e) => handleBulkMoveSchool(e.target.value)}
+                    value=""
+                    className="input-field py-1 px-3 text-xs w-auto bg-white border-secondary/30 text-secondary font-bold"
+                    title="Change school of selected students"
+                  >
+                    <option value="" disabled>Change School...</option>
+                    {uniqueSchools.map(s => <option key={s} value={s}>{s}</option>)}
+                    <option value="New">+ Add New School</option>
+                  </select>
+                  <button 
+                    onClick={handleBatchDelete}
+                    className="flex items-center gap-2 px-3 py-1 text-xs font-bold text-danger hover:bg-danger/10 rounded-lg transition-colors border border-danger/20"
+                    title="Delete selected students"
+                  >
+                    <Trash2 size={14} /> Delete Selected
+                  </button>
+                  <button 
+                    onClick={() => setSelectedIds([])}
+                    className="text-xs font-bold text-text-muted hover:underline"
+                  >Cancel</button>
+               </div>
+            </div>
+          )}
+        </AnimatePresence>
       </div>
 
       {showForm && (
@@ -238,61 +334,127 @@ const Students = () => {
           {isLoading && <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-secondary"></div>}
         </div>
         
-        <div className="grid gap-4">
-          {filteredStudents.length > 0 ? (
-            filteredStudents.map((s) => (
-              <div 
-                key={s.id} 
-                className={`p-4 rounded-xl border-2 transition-all bg-background/50 flex flex-col md:flex-row gap-4 items-center justify-between ${
-                  selectedIds.includes(s.id) ? 'border-secondary bg-secondary/5 shadow-md' : 'border-border hover:border-secondary/30'
-                }`}
-              >
-                <div className="flex items-center gap-4 w-full md:w-auto">
-                    <button 
-                      onClick={() => toggleSelect(s.id)}
-                      className={`transition-colors ${selectedIds.includes(s.id) ? 'text-secondary' : 'text-text-muted hover:text-secondary'}`}
-                    >
-                      {selectedIds.includes(s.id) ? <CheckSquare size={24} /> : <Square size={24} />}
+        <div className="overflow-x-auto rounded-xl border-2 border-border bg-background/50">
+          <table className="w-full text-left border-collapse min-w-[800px]">
+             <thead>
+               <tr className="bg-surface border-b-2 border-border text-text-muted uppercase tracking-widest text-[10px] font-black">
+                 <th className="p-4 w-12 text-center">
+                    <button onClick={toggleSelectAll} className="text-text-muted hover:text-secondary transition-colors">
+                      {selectedIds.length === filteredStudents.length && filteredStudents.length > 0 ? <CheckSquare size={18} /> : <Square size={18} />}
                     </button>
-
-                    <div className="w-12 h-12 rounded-full bg-secondary/10 flex items-center justify-center text-secondary font-black text-xl border border-secondary/20">
-                      {s.name.charAt(0).toUpperCase()}
-                    </div>
-                    <div>
-                      <h3 className="text-lg font-bold text-text-main flex items-center gap-2">
-                        {s.name} <span className="text-[10px] font-black bg-secondary/10 text-secondary border border-secondary/20 px-2 py-0.5 rounded-full uppercase">{s.school}</span>
-                      </h3>
-                      <div className="text-sm text-text-muted font-medium mt-1">NISN: <span className="text-text-main font-bold">{s.username}</span> {s.password ? `• Pass: ${s.password}` : ''}</div>
-                    </div>
-                </div>
-                
-                <div className="flex gap-2 w-full md:w-auto justify-end">
-                  <button 
-                    onClick={async () => {
-                      const res = await api.getResultsByStudent(s.id);
-                      setHistoryData({ student: s, results: res });
-                      setShowHistory(true);
-                    }} 
-                    className="btn btn-outline py-2 border-primary/30 text-primary hover:bg-primary/10" 
-                  >
-                    <Clock size={18} /> History
-                  </button>
-                  <button onClick={() => handleEdit(s)} className="btn btn-outline py-2 px-3 border-secondary/30 text-secondary hover:bg-secondary/10">
-                    <Edit3 size={18} /> Edit
-                  </button>
-                  <button onClick={() => handleDelete(s.id)} className="btn btn-outline py-2 border-danger/30 text-danger hover:bg-danger/10">
-                    <Trash2 size={18} />
-                  </button>
-                </div>
-              </div>
-            ))
-          ) : (
-            <div className="text-center p-12 text-text-muted border-2 border-dashed border-border rounded-xl font-bold">
-              No student accounts match your filter.
-            </div>
-          )}
+                 </th>
+                 <th className="p-4 w-16 text-center">No</th>
+                 <th className="p-4 w-16">Icon</th>
+                 <th className="p-4">Student Name</th>
+                 <th className="p-4 w-40">School</th>
+                 <th className="p-4 w-40">Username / NISN</th>
+                 <th className="p-4 w-32">Password</th>
+                 <th className="p-4 w-48 text-right">Actions</th>
+               </tr>
+             </thead>
+             <tbody>
+               {filteredStudents.length > 0 ? (
+                 filteredStudents.map((s, idx) => (
+                   <tr key={s.id} className={`border-b border-border transition-colors hover:bg-secondary/5 ${selectedIds.includes(s.id) ? 'bg-secondary/10' : ''}`}>
+                     <td className="p-4 text-center">
+                        <button 
+                          onClick={() => toggleSelect(s.id)}
+                          className={`transition-colors ${selectedIds.includes(s.id) ? 'text-secondary' : 'text-text-muted hover:text-secondary'}`}
+                        >
+                          {selectedIds.includes(s.id) ? <CheckSquare size={18} /> : <Square size={18} />}
+                        </button>
+                     </td>
+                     <td className="p-4 text-center text-sm font-bold text-text-muted">{idx + 1}</td>
+                     <td className="p-4">
+                        <div className="w-8 h-8 rounded-full bg-secondary/10 flex items-center justify-center text-secondary font-black text-xs border border-secondary/20">
+                          {s.name.charAt(0).toUpperCase()}
+                        </div>
+                     </td>
+                     <td className="p-4 font-bold text-text-main text-sm">{s.name}</td>
+                     <td className="p-4">
+                        <span className="px-2 py-1 rounded bg-secondary/10 text-secondary text-[10px] font-black uppercase border border-secondary/20">
+                          {s.school}
+                        </span>
+                     </td>
+                     <td className="p-4 font-mono text-xs">{s.username}</td>
+                     <td className="p-4 text-xs text-text-muted font-medium">{s.password || '-'}</td>
+                     <td className="p-4">
+                        <div className="flex justify-end gap-1">
+                          <button 
+                            onClick={async () => {
+                              const res = await api.getResultsByStudent(s.id);
+                              setHistoryData({ student: s, results: res });
+                              setShowHistory(true);
+                            }} 
+                            className="w-8 h-8 rounded-lg flex items-center justify-center text-primary hover:bg-primary/10 transition-colors"
+                            title="View History"
+                          >
+                            <Clock size={16} />
+                          </button>
+                          <button 
+                            onClick={() => handleEdit(s)} 
+                            className="w-8 h-8 rounded-lg flex items-center justify-center text-secondary hover:bg-secondary/10 transition-colors"
+                            title="Edit"
+                          >
+                            <Edit3 size={16} />
+                          </button>
+                          <button 
+                            onClick={() => handleDelete(s.id)} 
+                            className="w-8 h-8 rounded-lg flex items-center justify-center text-danger hover:bg-danger/10 transition-colors"
+                            title="Delete"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                     </td>
+                   </tr>
+                 ))
+               ) : (
+                 <tr>
+                    <td colSpan={8} className="p-12 text-center text-text-muted font-bold italic">No students found.</td>
+                 </tr>
+               )}
+             </tbody>
+          </table>
         </div>
       </div>
+
+      {/* Bulk Add Modal */}
+      {showBulkAdd && (
+        <div className="fixed inset-0 bg-text-main/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in text-text-main">
+          <div className="card bg-surface max-w-2xl w-full border-4 border-secondary shadow-2xl relative">
+            <button onClick={() => setShowBulkAdd(false)} className="absolute top-4 right-4 text-text-muted hover:text-danger">
+              <X size={24} />
+            </button>
+            <h2 className="text-2xl font-black mb-4 flex items-center gap-2">
+              <Upload className="text-secondary" /> Bulk Import Students
+            </h2>
+            <p className="text-sm text-text-muted mb-4 font-bold">
+              Paste from Excel or Google Sheets. Format: <span className="text-secondary bg-secondary/10 px-1 rounded">NISN | Name | School | Password</span>
+            </p>
+            <textarea 
+              className="input-field h-64 font-mono text-sm mb-6"
+              placeholder="123456	Budi Santoso	SDN 1 Jakarta	pass123&#10;789012	Siti Aminah	SDN 2 Jakarta	pass456"
+              value={bulkText}
+              onChange={e => setBulkText(e.target.value)}
+              title="Paste student data here"
+            />
+            <div className="flex gap-4">
+              <button 
+                onClick={() => setShowBulkAdd(false)} 
+                className="btn btn-outline flex-1 py-4 uppercase tracking-widest text-xs"
+              >Cancel</button>
+              <button 
+                onClick={handleBulkAdd}
+                disabled={isLoading || !bulkText.trim()}
+                className="btn btn-primary flex-1 py-4 uppercase tracking-widest text-xs"
+              >
+                {isLoading ? 'Processing...' : `Add ${bulkText.split('\n').filter(l => l.trim()).length} Students`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showHistory && historyData && (
         <div className="fixed inset-0 bg-text-main/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">

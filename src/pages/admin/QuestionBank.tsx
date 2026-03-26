@@ -1,23 +1,29 @@
 import React, { useState, useEffect } from 'react';
 import { AdminLayout } from './Dashboard';
 import { api, Question, Statement } from '../../lib/db';
-import { Plus, Trash2, Edit3, X, GripVertical, CheckSquare, Square, Filter } from 'lucide-react';
-import { Reorder, AnimatePresence } from 'framer-motion';
+import { Plus, Trash2, Edit3, X, CheckSquare, Square, Filter, Layers, Copy, Move, Search, Upload, FileQuestion } from 'lucide-react';
+import { AnimatePresence } from 'framer-motion';
 
 const QuestionBank = () => {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [filterSubject, setFilterSubject] = useState('All');
+  const [filterPackage, setFilterPackage] = useState('All');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [sortBy, setSortBy] = useState<'subject' | 'package' | 'question' | 'none'>('none');
   const [showForm, setShowForm] = useState(false);
-  
+  const [showBulkAdd, setShowBulkAdd] = useState(false);
+  const [bulkText, setBulkText] = useState('');
+
   const initialFormData: Partial<Question> = {
-    subject: '', 
-    question: '', 
+    subject: '',
+    package: '',
+    question: '',
     type: 'pilihan_ganda',
-    option_a: '', 
-    option_b: '', 
-    option_c: '', 
-    option_d: '', 
+    option_a: '',
+    option_b: '',
+    option_c: '',
+    option_d: '',
     correct_answer: 'A',
     statements: [
       { text: '', isCorrect: false, correctAnswer: 'Sesuai' },
@@ -32,14 +38,19 @@ const QuestionBank = () => {
 
   const [isLoading, setIsLoading] = useState(false);
   const [subjects, setSubjects] = useState<string[]>(['All']);
+  const [packages, setPackages] = useState<string[]>(['All']);
+  const [tempPackages, setTempPackages] = useState<string[]>([]);
+  const [tempSubjects, setTempSubjects] = useState<string[]>([]);
 
   const fetchQuestions = async () => {
     setIsLoading(true);
     try {
       const data = await api.getQuestions();
       setQuestions(data);
-      const uniqueSubjects = ['All', ...Array.from(new Set(data.map(q => q.subject)))];
+      const uniqueSubjects = ['All', ...Array.from(new Set(data.map(q => q.subject).filter(Boolean)))];
       setSubjects(uniqueSubjects);
+      const uniquePackages = ['All', ...Array.from(new Set(data.map(q => q.package).filter(Boolean)))];
+      setPackages(uniquePackages);
     } catch (err) {
       console.error(err);
     } finally {
@@ -51,43 +62,54 @@ const QuestionBank = () => {
     fetchQuestions();
   }, []);
 
-  const filteredQuestions = filterSubject === 'All' 
-    ? questions 
-    : questions.filter(q => q.subject === filterSubject);
+  const filteredQuestions = questions
+    .filter(q => (filterSubject === 'All' || q.subject === filterSubject))
+    .filter(q => (filterPackage === 'All' || q.package === filterPackage))
+    .filter(q => (searchTerm === '' ||
+      q.question.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (q.package || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      q.subject.toLowerCase().includes(searchTerm.toLowerCase())
+    ))
+    .sort((a, b) => {
+      if (sortBy === 'subject') return (a.subject || '').localeCompare(b.subject || '');
+      if (sortBy === 'package') return (a.package || '').localeCompare(b.package || '');
+      if (sortBy === 'question') return (a.question || '').localeCompare(b.question || '');
+      return 0;
+    });
 
   const handleReorder = async (newOrder: Question[]) => {
-    if (filterSubject !== 'All') return; // Reorder only in 'All' view for simplicity
+    if (filterSubject !== 'All' || filterPackage !== 'All' || sortBy !== 'none') return; // Reorder only in default view
     setQuestions(newOrder);
     setIsLoading(true);
     try {
-        await api.setQuestions(newOrder);
+      await api.setQuestions(newOrder);
     } catch (err) {
-        alert("Failed to save new order");
+      alert("Failed to save new order");
     } finally {
-        setIsLoading(false);
+      setIsLoading(false);
     }
   };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.subject || !formData.question) return alert("Subject and Question required");
-    
+
     setIsLoading(true);
     try {
-        const newQuestion = { ...formData, id: editingId || 'Q-' + Date.now().toString(36) } as Question;
-        
-        if (editingId) {
-          await api.updateQuestion(newQuestion);
-        } else {
-          await api.addQuestion(newQuestion);
-        }
-        
-        await fetchQuestions();
-        onCloseForm();
+      const newQuestion = { ...formData, id: editingId || 'Q-' + Date.now().toString(36) } as Question;
+
+      if (editingId) {
+        await api.updateQuestion(newQuestion);
+      } else {
+        await api.addQuestion(newQuestion);
+      }
+
+      await fetchQuestions();
+      onCloseForm();
     } catch (err) {
-        alert("Failed to save question");
+      alert("Failed to save question");
     } finally {
-        setIsLoading(false);
+      setIsLoading(false);
     }
   };
 
@@ -136,9 +158,74 @@ const QuestionBank = () => {
   };
 
   const toggleSelect = (id: string) => {
-    setSelectedIds(prev => 
+    setSelectedIds(prev =>
       prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
     );
+  };
+
+  const handleBulkAdd = async () => {
+    if (!bulkText.trim()) return;
+    setIsLoading(true);
+    try {
+      const lines = bulkText.split('\n').filter(l => l.trim());
+      const newQuestions: Question[] = lines.map(line => {
+        const parts = line.split(/[\t|]/).map(p => p.trim());
+        // Format: Package | Subject | Question | Type | OptionA | OptionB | OptionC | OptionD | Answer
+        const pkg = parts[0] || 'Default';
+        const subj = parts[1] || 'Umum';
+        const qText = parts[2] || '';
+        const typeRaw = (parts[3] || 'PG').toUpperCase();
+
+        let type: any = 'pilihan_ganda';
+        if (typeRaw === 'PK' || typeRaw === 'KOMPLEKS') type = 'pilihan_ganda_kompleks';
+        if (typeRaw === 'MCMA' || typeRaw === 'TF') type = 'multiple_choice_multiple_answer';
+
+        const q: Question = {
+          id: 'Q-' + Math.random().toString(36).substring(2, 9),
+          package: pkg,
+          subject: subj,
+          question: qText,
+          type: type,
+          image: ''
+        };
+
+        if (type === 'pilihan_ganda') {
+          q.option_a = parts[4] || '';
+          q.option_b = parts[5] || '';
+          q.option_c = parts[6] || '';
+          q.option_d = parts[7] || '';
+          q.correct_answer = (parts[8] || 'A') as any;
+        } else {
+          // For PK/MCMA, we expect simpler parsing for now
+          // Format for PK: A,B
+          // Format for MCMA: S,T,S
+          const optA = parts[4] || '';
+          const optB = parts[5] || '';
+          const optC = parts[6] || '';
+          const optD = parts[7] || '';
+          const ans = parts[8] || '';
+
+          q.statements = [
+            { text: optA, isCorrect: ans.includes('A'), correctAnswer: ans.includes('S') ? 'Sesuai' : 'Tidak Sesuai' },
+            { text: optB, isCorrect: ans.includes('B'), correctAnswer: ans.includes('T') ? 'Sesuai' : 'Tidak Sesuai' },
+            { text: optC, isCorrect: ans.includes('C'), correctAnswer: ans.includes('U') ? 'Sesuai' : 'Tidak Sesuai' },
+          ];
+        }
+        return q;
+      }).filter(q => q.question);
+
+      if (newQuestions.length === 0) throw new Error("No valid data found");
+
+      await api.setQuestions(newQuestions);
+      await fetchQuestions();
+      setShowBulkAdd(false);
+      setBulkText('');
+      alert(`Successfully added ${newQuestions.length} questions!`);
+    } catch (err: any) {
+      alert("Error: " + err.message);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleBatchDelete = async () => {
@@ -146,71 +233,245 @@ const QuestionBank = () => {
     if (confirm(`Delete ${selectedIds.length} selected questions?`)) {
       setIsLoading(true);
       try {
-          const remaining = questions.filter(q => !selectedIds.includes(q.id));
-          await api.setQuestions(remaining);
-          await fetchQuestions();
-          setSelectedIds([]);
+        // Use deleteQuestions API for batch deletion
+        await api.deleteQuestions(selectedIds);
+        await fetchQuestions();
+        setSelectedIds([]);
       } catch (err) {
-          alert("Failed to delete questions");
+        console.error("Failed to delete questions:", err);
+        alert("Failed to delete questions");
       } finally {
-          setIsLoading(false);
+        setIsLoading(false);
       }
     }
   };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.length === 0) return;
+    if (!confirm(`Are you sure you want to delete ${selectedIds.length} selected questions? This action cannot be undone.`)) return;
+
+    setIsLoading(true);
+    try {
+      await api.deleteQuestions(selectedIds);
+      await fetchQuestions();
+      setSelectedIds([]);
+      alert("Questions deleted successfully");
+    } catch (err) {
+      alert("Failed to delete questions");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleBulkSubjectChange = async (targetSubject: string) => {
+    if (selectedIds.length === 0) return;
+    if (targetSubject === 'New') {
+      const name = prompt("Enter new subject name:");
+      if (!name) return;
+      if (!subjects.includes(name) && !tempSubjects.includes(name)) {
+        setTempSubjects(prev => [...prev, name]);
+      }
+      targetSubject = name;
+    }
+    if (!confirm(`Change subject of ${selectedIds.length} questions to "${targetSubject}"?`)) return;
+
+    setIsLoading(true);
+    try {
+      const selectedQs = questions.filter(q => selectedIds.includes(q.id));
+      // Update each question individually using updateQuestion
+      const updatePromises = selectedQs.map(q =>
+        api.updateQuestion({ ...q, subject: targetSubject })
+      );
+      await Promise.all(updatePromises);
+      // Refresh all questions from database
+      await fetchQuestions();
+      setSelectedIds([]);
+      alert("Subjects updated successfully");
+    } catch (err) {
+      console.error("Failed to update subjects:", err);
+      alert("Failed to update subjects");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleBulkDuplicate = async () => {
+    if (selectedIds.length === 0) return;
+    if (!confirm(`Duplicate ${selectedIds.length} selected questions?`)) return;
+
+    setIsLoading(true);
+    try {
+      const selectedQs = questions.filter(q => selectedIds.includes(q.id));
+      const newQs = selectedQs.map(q => ({
+        ...q,
+        id: 'Q-' + Math.random().toString(36).substring(2, 9),
+        question: q.question + " (Copy)"
+      }));
+      // Add new questions using addQuestion for each
+      const addPromises = newQs.map(q => api.addQuestion(q));
+      await Promise.all(addPromises);
+      await fetchQuestions();
+      setSelectedIds([]);
+      alert("Questions duplicated successfully");
+    } catch (err) {
+      console.error("Failed to duplicate questions:", err);
+      alert("Failed to duplicate questions");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleBulkMove = async (targetPackage: string) => {
+    if (selectedIds.length === 0) return;
+    if (targetPackage === 'New') {
+      const name = prompt("Enter new package name:");
+      if (!name) return;
+      if (!packages.includes(name) && !tempPackages.includes(name)) {
+        setTempPackages(prev => [...prev, name]);
+      }
+      targetPackage = name;
+    }
+    if (!confirm(`Move ${selectedIds.length} questions to package "${targetPackage}"?`)) return;
+
+    setIsLoading(true);
+    try {
+      const selectedQs = questions.filter(q => selectedIds.includes(q.id));
+      // Update each question individually using updateQuestion
+      const updatePromises = selectedQs.map(q =>
+        api.updateQuestion({ ...q, package: targetPackage })
+      );
+      await Promise.all(updatePromises);
+      // Refresh all questions from database
+      await fetchQuestions();
+      setSelectedIds([]);
+      alert("Questions moved successfully");
+    } catch (err) {
+      console.error("Failed to move questions:", err);
+      alert("Failed to move questions");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const allUniquePackages = Array.from(new Set([...packages, ...tempPackages])).filter(p => p !== 'All');
+  const allUniqueSubjects = Array.from(new Set([...subjects, ...tempSubjects])).filter(s => s !== 'All');
+
+  const packageStats = allUniquePackages.map(p => ({
+    name: p,
+    count: questions.filter(q => q.package === p).length
+  }));
 
   return (
     <AdminLayout>
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 border-b-2 border-border pb-4 gap-4">
         <div>
-          <h1 className="text-3xl font-black text-text-main">Question Bank</h1>
+          <h1 className="text-3xl font-black text-text-main flex items-center gap-3">
+            <FileQuestion size={28} className="text-primary" /> Question Bank
+          </h1>
           <p className="text-sm text-text-muted font-bold">Manage and organize your exam material</p>
         </div>
         <div className="flex gap-3 w-full md:w-auto">
-          <button onClick={() => setShowForm(true)} className="btn btn-primary flex-1 md:flex-none">
+          <button onClick={() => setShowBulkAdd(true)} className="btn btn-outline border-primary text-primary hover:bg-primary/5 shadow-sm flex-1 md:flex-none">
+            <Upload size={20} /> Bulk Add
+          </button>
+          <button
+            onClick={() => {
+              setEditingId(null);
+              setFormData({
+                ...initialFormData,
+                package: filterPackage !== 'All' ? filterPackage : '',
+                subject: filterSubject !== 'All' ? filterSubject : ''
+              });
+              setShowForm(true);
+            }}
+            className="btn btn-primary shadow-lg flex-1 md:flex-none"
+          >
             <Plus size={20} /> Add Question
           </button>
         </div>
       </div>
 
-      <div className="flex flex-col md:flex-row gap-4 mb-6">
-        <div className="flex-1 flex gap-2 overflow-x-auto pb-2 scrollbar-none">
-          {subjects.map(s => (
-            <button 
-              key={s}
-              onClick={() => {
-                setFilterSubject(s);
-                setSelectedIds([]);
-              }}
-              className={`px-4 py-2 rounded-full text-sm font-bold whitespace-nowrap transition-all border-2 ${
-                filterSubject === s 
-                ? 'bg-primary border-primary text-white shadow-md scale-105' 
-                : 'bg-surface border-border text-text-muted hover:border-primary/50'
-              }`}
-            >
-              {s}
-            </button>
-          ))}
-        </div>
-        
-        <div className="flex gap-3">
-          <button 
-            onClick={toggleSelectAll} 
-            className="btn btn-outline bg-surface text-text-main border-border text-sm flex items-center gap-2"
-          >
-            {selectedIds.length === filteredQuestions.length && filteredQuestions.length > 0 ? <CheckSquare size={18} /> : <Square size={18} />}
-            {selectedIds.length === filteredQuestions.length && filteredQuestions.length > 0 ? 'Deselect All' : 'Select All'}
-          </button>
-          
-          <AnimatePresence>
-            {selectedIds.length > 0 && (
-              <button 
-                onClick={handleBatchDelete}
-                className="btn bg-danger text-white text-sm flex items-center gap-2 animate-in slide-in-from-right-4"
+      <div className="flex flex-col gap-6 mb-8">
+        <div className="flex flex-col gap-2">
+          <label className="text-xs font-black uppercase tracking-widest text-text-muted ml-1">Filter Subject</label>
+          <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
+            {Array.from(new Set([...subjects, ...tempSubjects])).map(s => (
+              <button
+                key={s}
+                onClick={() => {
+                  setFilterSubject(s);
+                  setSelectedIds([]);
+                }}
+                className={`px-4 py-2 rounded-xl text-sm font-bold whitespace-nowrap transition-all border-2 ${filterSubject === s
+                  ? 'bg-primary border-primary text-white shadow-md'
+                  : 'bg-surface border-border text-text-muted hover:border-primary/50'
+                  }`}
               >
-                <Trash2 size={18} /> Delete ({selectedIds.length})
+                {s}
               </button>
-            )}
-          </AnimatePresence>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <label className="text-xs font-black uppercase tracking-widest text-text-muted ml-1">Filter Package</label>
+          <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
+            {Array.from(new Set([...packages, ...tempPackages])).map(p => (
+              <button
+                key={p}
+                onClick={() => {
+                  setFilterPackage(p);
+                  setSelectedIds([]);
+                }}
+                className={`px-4 py-2 rounded-xl text-sm font-bold whitespace-nowrap transition-all border-2 ${filterPackage === p
+                  ? 'bg-secondary border-secondary text-white shadow-md'
+                  : 'bg-surface border-border text-text-muted hover:border-secondary/50'
+                  }`}
+              >
+                {p}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-4 border-t border-border/50 pt-4">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-bold text-text-muted">Sort By:</span>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as any)}
+              className="bg-surface border-2 border-border rounded-lg px-3 py-1 text-sm font-bold text-text-main focus:border-primary outline-none"
+              title="Sort questions by"
+            >
+              <option value="none">Default (Custom Order)</option>
+              <option value="package">Package Name</option>
+              <option value="subject">Subject</option>
+              <option value="question">Question Text</option>
+            </select>
+          </div>
+
+          <div className="flex-1"></div>
+
+          <div className="flex gap-3">
+            <button
+              onClick={toggleSelectAll}
+              className="btn btn-outline bg-surface text-text-main border-border text-sm flex items-center gap-2"
+            >
+              {selectedIds.length === filteredQuestions.length && filteredQuestions.length > 0 ? <CheckSquare size={18} /> : <Square size={18} />}
+              {selectedIds.length === filteredQuestions.length && filteredQuestions.length > 0 ? 'Deselect All' : 'Select All'}
+            </button>
+
+            <AnimatePresence>
+              {selectedIds.length > 0 && (
+                <button
+                  onClick={handleBatchDelete}
+                  className="btn bg-danger text-white text-sm flex items-center gap-2 animate-in slide-in-from-right-4"
+                >
+                  <Trash2 size={18} /> Delete ({selectedIds.length})
+                </button>
+              )}
+            </AnimatePresence>
+          </div>
         </div>
       </div>
 
@@ -221,25 +482,35 @@ const QuestionBank = () => {
             <X size={24} />
           </button>
           <h2 className="text-xl font-bold mb-6">{editingId ? 'Edit Question' : 'Create New Question'}</h2>
-          
+
           <form onSubmit={handleSave} className="grid md:grid-cols-2 gap-x-6 gap-y-4">
             <div className="input-group">
+              <label className="input-label" htmlFor="qb-package">Package Group</label>
+              <input
+                id="qb-package"
+                type="text" className="input-field" placeholder="e.g. TO-1, Latihan-A"
+                value={formData.package} onChange={e => setFormData({ ...formData, package: e.target.value })}
+                title="Enter question package group"
+              />
+            </div>
+
+            <div className="input-group">
               <label className="input-label" htmlFor="qb-subject">Subject Category</label>
-              <input 
+              <input
                 id="qb-subject"
                 type="text" className="input-field" placeholder="e.g. Mathematics, Science"
-                value={formData.subject} onChange={e => setFormData({...formData, subject: e.target.value})}
+                value={formData.subject} onChange={e => setFormData({ ...formData, subject: e.target.value })}
                 title="Enter subject category"
               />
             </div>
 
             <div className="input-group">
               <label className="input-label" htmlFor="qb-type">Question Type</label>
-              <select 
+              <select
                 id="qb-type"
                 className="input-field"
-                value={formData.type} 
-                onChange={e => setFormData({...formData, type: e.target.value as any})}
+                value={formData.type}
+                onChange={e => setFormData({ ...formData, type: e.target.value as any })}
                 title="Select question type"
               >
                 <option value="pilihan_ganda">Pilihan Ganda (Single Choice)</option>
@@ -247,21 +518,21 @@ const QuestionBank = () => {
                 <option value="multiple_choice_multiple_answer">MCMA (Sesuai / Tidak Sesuai)</option>
               </select>
             </div>
-            
+
             <div className="input-group md:col-span-2">
               <label className="input-label">Question Text</label>
-              <textarea 
+              <textarea
                 className="input-field min-h-[100px]" placeholder="Type your full question here..."
-                value={formData.question} onChange={e => setFormData({...formData, question: e.target.value})}
+                value={formData.question} onChange={e => setFormData({ ...formData, question: e.target.value })}
                 title="Enter question text"
               />
             </div>
 
             <div className="input-group md:col-span-2">
               <label className="input-label">Image URL (Optional)</label>
-              <input 
+              <input
                 type="text" className="input-field" placeholder="https://example.com/image.jpg"
-                value={formData.image || ''} onChange={e => setFormData({...formData, image: e.target.value})}
+                value={formData.image || ''} onChange={e => setFormData({ ...formData, image: e.target.value })}
                 title="Enter image URL (optional)"
               />
               {formData.image && (
@@ -270,32 +541,32 @@ const QuestionBank = () => {
                 </div>
               )}
             </div>
-            
+
             {formData.type === 'pilihan_ganda' && (
               <>
                 <div className="input-group">
                   <label className="input-label" htmlFor="qb-opt-a">Option A</label>
-                  <input id="qb-opt-a" type="text" className="input-field border-primary/30" value={formData.option_a} onChange={e => setFormData({...formData, option_a: e.target.value})} title="Option A text" placeholder="Answer choice A" />
+                  <input id="qb-opt-a" type="text" className="input-field border-primary/30" value={formData.option_a} onChange={e => setFormData({ ...formData, option_a: e.target.value })} title="Option A text" placeholder="Answer choice A" />
                 </div>
                 <div className="input-group">
                   <label className="input-label" htmlFor="qb-opt-b">Option B</label>
-                  <input id="qb-opt-b" type="text" className="input-field border-primary/30" value={formData.option_b} onChange={e => setFormData({...formData, option_b: e.target.value})} title="Option B text" placeholder="Answer choice B" />
+                  <input id="qb-opt-b" type="text" className="input-field border-primary/30" value={formData.option_b} onChange={e => setFormData({ ...formData, option_b: e.target.value })} title="Option B text" placeholder="Answer choice B" />
                 </div>
                 <div className="input-group">
                   <label className="input-label" htmlFor="qb-opt-c">Option C</label>
-                  <input id="qb-opt-c" type="text" className="input-field border-primary/30" value={formData.option_c} onChange={e => setFormData({...formData, option_c: e.target.value})} title="Option C text" placeholder="Answer choice C" />
+                  <input id="qb-opt-c" type="text" className="input-field border-primary/30" value={formData.option_c} onChange={e => setFormData({ ...formData, option_c: e.target.value })} title="Option C text" placeholder="Answer choice C" />
                 </div>
                 <div className="input-group">
                   <label className="input-label" htmlFor="qb-opt-d">Option D</label>
-                  <input id="qb-opt-d" type="text" className="input-field border-primary/30" value={formData.option_d} onChange={e => setFormData({...formData, option_d: e.target.value})} title="Option D text" placeholder="Answer choice D" />
+                  <input id="qb-opt-d" type="text" className="input-field border-primary/30" value={formData.option_d} onChange={e => setFormData({ ...formData, option_d: e.target.value })} title="Option D text" placeholder="Answer choice D" />
                 </div>
                 <div className="input-group md:col-span-2">
                   <label className="input-label" htmlFor="qb-correct">Correct Answer</label>
-                  <select 
+                  <select
                     id="qb-correct"
                     className="input-field text-lg font-bold bg-secondary/10 border-secondary/50 text-secondary"
-                    value={formData.correct_answer} 
-                    onChange={e => setFormData({...formData, correct_answer: e.target.value as 'A'|'B'|'C'|'D'})}
+                    value={formData.correct_answer}
+                    onChange={e => setFormData({ ...formData, correct_answer: e.target.value as 'A' | 'B' | 'C' | 'D' })}
                     title="Select the correct option"
                   >
                     <option value="A">Choice A</option>
@@ -312,28 +583,28 @@ const QuestionBank = () => {
                 <label className="input-label">Statements (3 total)</label>
                 {formData.statements?.map((s, i) => (
                   <div key={i} className="flex gap-4 items-center bg-background/30 p-3 rounded-lg border border-border">
-                    <span className="font-bold text-primary">{i+1}.</span>
-                    <input 
+                    <span className="font-bold text-primary">{i + 1}.</span>
+                    <input
                       id={`qb-stmt-${i}`}
-                      type="text" className="input-field flex-1" placeholder={`Statement ${i+1}`}
+                      type="text" className="input-field flex-1" placeholder={`Statement ${i + 1}`}
                       value={s.text} onChange={e => updateStatement(i, 'text', e.target.value)}
-                      title={`Statement ${i+1} text`}
+                      title={`Statement ${i + 1} text`}
                     />
                     {formData.type === 'pilihan_ganda_kompleks' ? (
                       <div className="flex items-center gap-2">
-                        <input 
-                          type="checkbox" className="w-5 h-5" 
+                        <input
+                          type="checkbox" className="w-5 h-5"
                           checked={s.isCorrect} onChange={e => updateStatement(i, 'isCorrect', e.target.checked)}
-                          aria-label={`Statement ${i+1} is correct`}
-                          title={`Mark statement ${i+1} as correct`}
+                          aria-label={`Statement ${i + 1} is correct`}
+                          title={`Mark statement ${i + 1} as correct`}
                         />
                         <span className="text-xs font-bold">Benar</span>
                       </div>
                     ) : (
-                      <select 
+                      <select
                         className="input-field w-32"
                         value={s.correctAnswer} onChange={e => updateStatement(i, 'correctAnswer', e.target.value)}
-                        title={`Correct answer for statement ${i+1}`}
+                        title={`Correct answer for statement ${i + 1}`}
                       >
                         <option value="Sesuai">Sesuai</option>
                         <option value="Tidak Sesuai">Tidak Sesuai</option>
@@ -354,110 +625,255 @@ const QuestionBank = () => {
       )}
 
       <div className="card bg-surface p-6">
-        <div className="flex justify-between items-center mb-6">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
           <h2 className="text-xl font-bold flex items-center gap-2">
             <Filter size={20} className="text-primary" />
-            {filterSubject === 'All' ? 'All Questions' : `${filterSubject} Questions`} ({filteredQuestions.length})
+            {filterSubject === 'All' && filterPackage === 'All' ? 'All Questions' :
+              `${filterSubject !== 'All' ? filterSubject : ''} ${filterPackage !== 'All' ? `[${filterPackage}]` : ''} Questions`}
+            ({filteredQuestions.length})
             {isLoading && <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary ml-2"></div>}
           </h2>
-          {filterSubject === 'All' ? (
-             <p className="text-xs text-text-muted italic">Drag the handle to reorder questions.</p>
-          ) : (
-             <p className="text-xs text-warning font-bold italic">Reorder disabled in filter view.</p>
-          )}
-        </div>
-        
-        <Reorder.Group 
-          axis="y" 
-          values={questions} 
-          onReorder={handleReorder}
-          className="space-y-4"
-        >
-          {filteredQuestions.length > 0 ? (
-            filteredQuestions.map((q) => (
-              <Reorder.Item 
-                key={q.id} 
-                value={q}
-                dragListener={filterSubject === 'All'}
-                className={`p-4 rounded-xl border-2 transition-all flex gap-4 ${
-                  selectedIds.includes(q.id) 
-                  ? 'border-primary bg-primary/5 shadow-md' 
-                  : 'border-border hover:border-primary/30 bg-background/50'
-                }`}
+          <div className="relative w-full sm:w-64">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" size={16} />
+            <input
+              type="text"
+              placeholder="Search questions..."
+              className="input-field pl-9 py-2 text-sm"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              title="Search by question text, package, or subject"
+            />
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-danger"
               >
-                <div className="flex flex-col items-center gap-3">
-                   <div 
-                    className={`p-1 transition-colors ${filterSubject === 'All' ? 'cursor-grab active:cursor-grabbing text-text-muted hover:text-primary' : 'text-text-muted/20'}`}
-                    title={filterSubject === 'All' ? "Drag to reorder" : "Filtering active"}
-                   >
-                     <GripVertical size={24} />
-                   </div>
-                   <button 
-                    onClick={() => toggleSelect(q.id)}
-                    className={`transition-colors ${selectedIds.includes(q.id) ? 'text-primary' : 'text-text-muted hover:text-primary'}`}
-                   >
-                     {selectedIds.includes(q.id) ? <CheckSquare size={24} /> : <Square size={24} />}
-                   </button>
-                </div>
+                <X size={14} />
+              </button>
+            )}
+          </div>
+        </div>
 
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-2 flex-wrap">
-                    <span className="text-[10px] font-black bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 rounded-full uppercase tracking-wider">{q.subject}</span>
-                    <span className="text-[10px] font-black bg-secondary/10 text-secondary border border-secondary/20 px-2 py-0.5 rounded-full uppercase tracking-wider">
-                      {q.type === 'pilihan_ganda' ? 'Single Choice' : 
-                       q.type === 'pilihan_ganda_kompleks' ? 'PG Kompleks' : 'MCMA'}
-                    </span>
-                  </div>
-                  <h3 className="text-lg font-bold text-text-main mb-2 leading-tight">{q.question}</h3>
-                  
-                  {q.image && (
-                    <div className="mb-4 rounded-xl overflow-hidden border border-border bg-background">
-                      <img src={q.image} alt="Question" className="max-h-48 w-full object-contain" />
-                    </div>
-                  )}
-                  
-                  {q.type === 'pilihan_ganda' ? (
-                    <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm text-text-muted font-medium">
-                      <div className={q.correct_answer === 'A' ? 'text-secondary font-bold' : ''}><span className="opacity-50 mr-1">A.</span> {q.option_a}</div>
-                      <div className={q.correct_answer === 'B' ? 'text-secondary font-bold' : ''}><span className="opacity-50 mr-1">B.</span> {q.option_b}</div>
-                      <div className={q.correct_answer === 'C' ? 'text-secondary font-bold' : ''}><span className="opacity-50 mr-1">C.</span> {q.option_c}</div>
-                      <div className={q.correct_answer === 'D' ? 'text-secondary font-bold' : ''}><span className="opacity-50 mr-1">D.</span> {q.option_d}</div>
-                    </div>
-                  ) : (
-                    <div className="space-y-1">
-                      {q.statements?.map((s, i) => (
-                        <div key={i} className="text-sm flex gap-2 items-center">
-                          <span className="text-xs font-bold bg-border/50 w-5 h-5 flex items-center justify-center rounded-full text-text-muted">{i+1}</span>
-                          <span className="text-text-main font-medium">{s.text}</span>
-                          <span className="text-[10px] font-black px-2 py-0.5 rounded bg-secondary/10 text-secondary ml-auto border border-secondary/20">
-                            {q.type === 'pilihan_ganda_kompleks' ? (s.isCorrect ? 'BENAR' : 'SALAH') : s.correctAnswer?.toUpperCase()}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                
-                <div className="flex flex-col gap-2 justify-start border-l border-border pl-4">
-                  <button onClick={() => handleEdit(q)} className="w-10 h-10 rounded-lg flex items-center justify-center text-text-muted hover:bg-warning/10 hover:text-warning transition-colors" title="Edit">
-                    <Edit3 size={18} />
-                  </button>
-                  <button onClick={() => handleDelete(q.id)} className="w-10 h-10 rounded-lg flex items-center justify-center text-text-muted hover:bg-danger/10 hover:text-danger transition-colors" title="Delete">
-                    <Trash2 size={18} />
-                  </button>
-                </div>
-              </Reorder.Item>
-            ))
-          ) : (
-            <div className="text-center p-12 text-text-muted border-2 border-dashed border-border rounded-2xl flex flex-col items-center gap-4">
-              <div className="w-16 h-16 rounded-full bg-background flex items-center justify-center">
-                <Filter size={32} />
+        {/* Package Summary Bar */}
+        <div className="flex gap-2 mb-6 overflow-x-auto pb-2 scrollbar-none">
+          {packageStats.map(ps => (
+            <button
+              key={ps.name}
+              onClick={() => setFilterPackage(ps.name)}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border-2 whitespace-nowrap transition-all ${filterPackage === ps.name ? 'border-secondary bg-secondary/10 text-secondary' : 'border-border bg-background hover:border-secondary/30'
+                }`}
+            >
+              <Layers size={14} />
+              <span className="text-xs font-black uppercase">{ps.name}</span>
+              <span className="text-[10px] bg-secondary/20 px-1.5 rounded-full font-bold">{ps.count}</span>
+            </button>
+          ))}
+          <button
+            onClick={() => {
+              const name = prompt("Enter new package name:");
+              if (name) {
+                if (!packages.includes(name) && !tempPackages.includes(name)) {
+                  setTempPackages(prev => [...prev, name]);
+                }
+                setFilterPackage(name);
+                setSelectedIds([]);
+              }
+            }}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg border-2 border-dashed border-border bg-background hover:border-primary/50 text-text-muted hover:text-primary transition-all whitespace-nowrap font-bold"
+          >
+            <Plus size={14} />
+            <span className="text-xs uppercase">Create New Package View</span>
+          </button>
+        </div>
+
+        {/* Bulk Actions Bar */}
+        <AnimatePresence>
+          {selectedIds.length > 0 && (
+            <div className="flex items-center gap-4 p-4 mb-4 bg-primary/5 border-2 border-primary/20 rounded-xl relative overflow-hidden">
+              <div className="absolute top-0 left-0 w-1 h-full bg-primary" />
+              <span className="text-sm font-black text-primary uppercase tracking-widest">{selectedIds.length} Selected</span>
+              <div className="h-6 w-[2px] bg-primary/20 mx-2" />
+              <div className="flex gap-2 flex-wrap flex-1">
+                <select
+                  onChange={(e) => handleBulkMove(e.target.value)}
+                  value=""
+                  className="input-field py-1 px-3 text-xs w-auto bg-white border-primary/30 text-primary font-bold shadow-sm"
+                  title="Move selected questions to a package"
+                >
+                  <option value="" disabled>Move to Package...</option>
+                  {allUniquePackages.map(p => <option key={p} value={p}>{p}</option>)}
+                  <option value="New">+ Add New Package</option>
+                </select>
+                <select
+                  onChange={(e) => handleBulkSubjectChange(e.target.value)}
+                  value=""
+                  className="input-field py-1 px-3 text-xs w-auto bg-white border-primary/30 text-primary font-bold shadow-sm"
+                  title="Change subject of selected questions"
+                >
+                  <option value="" disabled>Change Subject...</option>
+                  {allUniqueSubjects.map(s => <option key={s} value={s}>{s}</option>)}
+                  <option value="New">+ Add New Subject</option>
+                </select>
+                <button
+                  onClick={handleBulkDuplicate}
+                  className="flex items-center gap-2 px-3 py-1 text-xs font-bold text-secondary hover:bg-secondary/10 rounded-lg transition-colors border border-secondary/20"
+                  title="Duplicate selected questions"
+                >
+                  <Copy size={14} /> Duplicate Selected
+                </button>
+                <button
+                  onClick={handleBulkDelete}
+                  className="flex items-center gap-2 px-3 py-1 text-xs font-bold text-danger hover:bg-danger/10 rounded-lg transition-colors border border-danger/20"
+                  title="Permanently delete selected questions"
+                >
+                  <Trash2 size={14} /> Delete Selected
+                </button>
+                <button
+                  onClick={() => setSelectedIds([])}
+                  className="text-xs font-bold text-text-muted hover:underline"
+                >Cancel</button>
               </div>
-              <p className="font-bold text-lg">No questions found</p>
             </div>
           )}
-        </Reorder.Group>
+        </AnimatePresence>
+
+        <div className="overflow-x-auto rounded-xl border-2 border-border bg-background/50">
+          <table className="w-full text-left border-collapse min-w-[800px]">
+            <thead>
+              <tr className="bg-surface border-b-2 border-border text-text-muted uppercase tracking-widest text-[10px] font-black">
+                <th className="p-4 w-12 text-center">
+                  <button onClick={toggleSelectAll} className="text-text-muted hover:text-primary transition-colors">
+                    {selectedIds.length === filteredQuestions.length && filteredQuestions.length > 0 ? <CheckSquare size={20} /> : <Square size={20} />}
+                  </button>
+                </th>
+                <th className="p-4 w-16 text-center">No</th>
+                <th className="p-4 w-32">Package</th>
+                <th className="p-4 w-32">Subject</th>
+                <th className="p-4">Question</th>
+                <th className="p-4 w-32">Type</th>
+                <th className="p-4 w-32 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredQuestions.length > 0 ? (
+                filteredQuestions.map((q, idx) => (
+                  <tr
+                    key={q.id}
+                    className={`border-b border-border transition-colors hover:bg-primary/5 ${selectedIds.includes(q.id) ? 'bg-primary/10' : ''
+                      }`}
+                  >
+                    <td className="p-4 text-center">
+                      <button
+                        onClick={() => toggleSelect(q.id)}
+                        className={`transition-colors ${selectedIds.includes(q.id) ? 'text-primary' : 'text-text-muted hover:text-primary'}`}
+                      >
+                        {selectedIds.includes(q.id) ? <CheckSquare size={20} /> : <Square size={20} />}
+                      </button>
+                    </td>
+                    <td className="p-4 text-center font-bold text-text-muted">{idx + 1}</td>
+                    <td className="p-4">
+                      {q.package ? (
+                        <span className="px-2 py-1 rounded bg-secondary/10 text-secondary text-[10px] font-black uppercase border border-secondary/20">
+                          {q.package}
+                        </span>
+                      ) : (
+                        <span className="text-text-muted italic text-[10px]">-</span>
+                      )}
+                    </td>
+                    <td className="p-4">
+                      <span className="px-2 py-1 rounded bg-primary/10 text-primary text-[10px] font-black uppercase border border-primary/20">
+                        {q.subject}
+                      </span>
+                    </td>
+                    <td className="p-4">
+                      <div className="flex flex-col gap-1">
+                        <p className="font-bold text-text-main text-sm line-clamp-1" title={q.question}>{q.question}</p>
+                        <div className="flex gap-2">
+                          {q.image && (
+                            <span className="text-[9px] text-primary flex items-center gap-1 font-black uppercase">
+                              <Layers size={10} /> Image
+                            </span>
+                          )}
+                          <span className="text-[9px] text-text-muted font-bold uppercase truncate max-w-[200px]">
+                            {q.type === 'pilihan_ganda' ? `${q.option_a}, ${q.option_b}...` : `${q.statements?.length} Statement`}
+                          </span>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="p-4">
+                      <span className="text-[10px] font-black bg-accent/10 text-accent border border-accent/20 px-2 py-1 rounded uppercase">
+                        {q.type === 'pilihan_ganda' ? 'Single' :
+                          q.type === 'pilihan_ganda_kompleks' ? 'Kompleks' : 'MCMA'}
+                      </span>
+                    </td>
+                    <td className="p-4">
+                      <div className="flex justify-end gap-1">
+                        <button
+                          onClick={() => handleEdit(q)}
+                          className="w-8 h-8 rounded-lg flex items-center justify-center text-text-muted hover:bg-warning/10 hover:text-warning transition-colors"
+                          title="Edit"
+                        >
+                          <Edit3 size={16} />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(q.id)}
+                          className="w-8 h-8 rounded-lg flex items-center justify-center text-text-muted hover:bg-danger/10 hover:text-danger transition-colors"
+                          title="Delete"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={7} className="p-12 text-center text-text-muted font-bold italic">
+                    No questions found matching your filters.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
+      {/* Bulk Add Modal */}
+      {showBulkAdd && (
+        <div className="fixed inset-0 bg-text-main/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in text-text-main">
+          <div className="card bg-surface max-w-4xl w-full border-4 border-primary shadow-2xl relative">
+            <button onClick={() => setShowBulkAdd(false)} className="absolute top-4 right-4 text-text-muted hover:text-danger">
+              <X size={24} />
+            </button>
+            <h2 className="text-2xl font-black mb-4 flex items-center gap-2">
+              <Upload className="text-primary" /> Bulk Import Questions
+            </h2>
+            <p className="text-sm text-text-muted mb-4 font-bold">
+              Paste from Excel/Sheets. Use Tab or Pipe (|) as separator.&#10;
+              Columns: <span className="text-primary bg-primary/10 px-1 rounded uppercase tracking-tighter">Package | Subject | Question | Type (PG/PK/MCMA) | OptA | OptB | OptC | OptD | Answer</span>
+            </p>
+            <textarea
+              className="input-field h-80 font-mono text-xs mb-6"
+              placeholder="Paket A | Mat | 1+1? | PG | 1 | 2 | 3 | 4 | B&#10;Paket A | Bio | Tumbuhan? | PK | Akar | Batang | Daun | - | A,B"
+              value={bulkText}
+              onChange={e => setBulkText(e.target.value)}
+              title="Paste your questions here"
+            />
+            <div className="flex gap-4">
+              <button
+                onClick={() => setShowBulkAdd(false)}
+                className="btn btn-outline flex-1 py-4 font-black uppercase tracking-widest text-xs"
+              >Cancel</button>
+              <button
+                onClick={handleBulkAdd}
+                disabled={isLoading || !bulkText.trim()}
+                className="btn btn-primary flex-1 py-4 font-black uppercase tracking-widest text-xs"
+              >
+                {isLoading ? 'Processing...' : `Add ${bulkText.split('\n').filter(l => l.trim()).length} Questions`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </AdminLayout>
   );
 };

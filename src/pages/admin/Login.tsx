@@ -55,7 +55,6 @@ const AdminLogin = () => {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
-            <span className="text-xs text-text-muted mt-2 inline-block font-bold opacity-50 uppercase tracking-widest">Default: admin / admin123</span>
           </div>
 
           <button type="submit" className="btn btn-primary w-full mt-4 py-3 text-lg">

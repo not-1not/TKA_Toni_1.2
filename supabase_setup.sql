@@ -6,6 +6,7 @@
 CREATE TABLE IF NOT EXISTS public.questions (
     id TEXT PRIMARY KEY,
     subject TEXT NOT NULL,
+    package TEXT DEFAULT '',
     question TEXT NOT NULL,
     type TEXT NOT NULL,
     options JSONB,

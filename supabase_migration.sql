@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS public.tokens (
     "durationMinutes" INTEGER NOT NULL,
     "questionCount" INTEGER NOT NULL,
     subject TEXT,
+    "package" TEXT,
     active BOOLEAN DEFAULT false,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -48,6 +49,19 @@ CREATE TABLE IF NOT EXISTS public.exam_states (
     "optionOrder" JSONB DEFAULT '{}'::jsonb,
     submitted BOOLEAN DEFAULT false,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 5. Create table 'questions'
+CREATE TABLE IF NOT EXISTS public.questions (
+    id TEXT PRIMARY KEY,
+    subject TEXT,
+    "package" TEXT,
+    question TEXT NOT NULL,
+    type TEXT NOT NULL,
+    image TEXT,
+    options JSONB,
+    answer TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 -- ==========================================

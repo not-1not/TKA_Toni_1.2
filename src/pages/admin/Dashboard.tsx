@@ -9,6 +9,12 @@ const AdminLayout = ({ children }: { children: React.ReactNode }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const [showSidebar, setShowSidebar] = useState(false);
+  const [theme, setTheme] = useState(localStorage.getItem('admin-theme') || 'default');
+
+  React.useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('admin-theme', theme);
+  }, [theme]);
 
   const links = [
     { to: '/admin/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} /> },
@@ -20,8 +26,15 @@ const AdminLayout = ({ children }: { children: React.ReactNode }) => {
     { to: '/admin/results', label: 'Results', icon: <Activity size={20} /> },
   ];
 
+  const themes = [
+    { id: 'default', label: 'Default', class: 'theme-dot-default' },
+    { id: 'dark', label: 'Dark', class: 'theme-dot-dark' },
+    { id: 'emerald', label: 'Emerald', class: 'theme-dot-emerald' },
+    { id: 'sunset', label: 'Sunset', class: 'theme-dot-sunset' },
+  ];
+
   return (
-    <div className="flex flex-col md:flex-row h-screen bg-background">
+    <div className="flex flex-col md:flex-row h-screen bg-background text-text-main transition-colors duration-300">
       {/* Mobile Overlay */}
       {showSidebar && (
         <div
@@ -34,26 +47,26 @@ const AdminLayout = ({ children }: { children: React.ReactNode }) => {
       <aside className={`
         fixed md:relative inset-y-0 left-0 z-50
         w-64 md:w-64 
-        bg-text-main text-white flex flex-col shadow-xl
+        bg-surface border-r-2 border-border flex flex-col shadow-xl
         transform transition-transform duration-300 ease-in-out
         ${showSidebar ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
         h-full
       `}>
         {/* Mobile Header */}
-        <div className="p-6 border-b border-white/10 flex items-center justify-between">
+        <div className="p-6 border-b-2 border-border flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Settings size={28} className="text-primary" />
-            <span className="font-black text-xl tracking-wider">TKA ADMIN</span>
+            <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-white font-black shadow-lg">T</div>
+            <span className="font-black text-xl tracking-wider text-text-main">TKA ADMIN</span>
           </div>
           <button
             onClick={() => setShowSidebar(false)}
-            className="md:hidden w-8 h-8 flex items-center justify-center hover:bg-white/10 rounded-lg"
+            className="md:hidden w-8 h-8 flex items-center justify-center hover:bg-black/5 rounded-lg"
           >
             <X size={20} />
           </button>
         </div>
 
-        <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
+        <nav className="flex-1 p-4 space-y-1 overflow-y-auto mt-4">
           {links.map(link => {
             const active = location.pathname.startsWith(link.to);
             return (
@@ -61,43 +74,54 @@ const AdminLayout = ({ children }: { children: React.ReactNode }) => {
                 key={link.to}
                 to={link.to}
                 onClick={() => setShowSidebar(false)}
-                className={`flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-colors ${active
-                  ? 'bg-primary text-white border border-primary-hover shadow-lg'
-                  : 'text-text-muted hover:bg-white/5 hover:text-white'
+                className={`flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-all ${active
+                  ? 'bg-primary text-white shadow-lg shadow-primary/30 scale-[1.02] border-2 border-primary'
+                  : 'text-text-muted hover:bg-primary/5 hover:text-primary border-2 border-transparent'
                   }`}
               >
                 {link.icon}
-                <span className="hidden sm:inline">{link.label}</span>
+                <span className="font-bold">{link.label}</span>
               </Link>
             )
           })}
         </nav>
 
-        <div className="p-4 border-t border-white/10">
+        {/* Theme Switcher in Sidebar */}
+        <div className="p-4 border-t-2 border-border">
+          <div className="flex flex-wrap gap-2 mb-4 px-2">
+            {themes.map(t => (
+              <button
+                key={t.id}
+                onClick={() => setTheme(t.id)}
+                title={t.label}
+                className={`w-8 h-8 rounded-full border-2 transition-all ${t.class} ${theme === t.id ? 'border-primary scale-110 shadow-md' : 'border-transparent opacity-60 hover:opacity-100'}`}
+              />
+            ))}
+          </div>
           <button
             onClick={() => { logout(); navigate('/admin/login'); }}
-            className="flex items-center gap-3 px-4 py-3 rounded text-danger hover:bg-danger/10 w-full font-bold transition-colors uppercase tracking-wider text-sm"
+            className="flex items-center gap-3 px-4 py-3 rounded-xl text-danger hover:bg-danger/10 w-full font-black transition-colors uppercase tracking-widest text-[10px] border-2 border-transparent hover:border-danger/20"
           >
-            <LogOut size={20} />
-            <span className="hidden sm:inline">Logout</span>
+            <LogOut size={18} />
+            <span>Logout</span>
           </button>
         </div>
       </aside>
 
       {/* Mobile Header Bar */}
-      <div className="md:hidden fixed top-0 left-0 right-0 h-14 bg-text-main text-white flex items-center justify-between px-4 z-30 shadow-lg">
+      <div className="md:hidden fixed top-0 left-0 right-0 h-14 bg-surface border-b-2 border-border flex items-center justify-between px-4 z-30 shadow-sm">
         <button
           onClick={() => setShowSidebar(true)}
-          className="w-10 h-10 flex items-center justify-center hover:bg-white/10 rounded-lg transition-colors"
+          className="w-10 h-10 flex items-center justify-center hover:bg-black/5 rounded-lg transition-colors"
         >
           <Menu size={24} />
         </button>
-        <span className="font-bold text-lg tracking-wider">TKA ADMIN</span>
+        <span className="font-black text-lg tracking-wider text-text-main">TKA ADMIN</span>
         <div className="w-10"></div>
       </div>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-y-auto p-4 md:p-8 pt-16 md:pt-8 relative">
+      <main className="flex-1 overflow-y-auto p-4 md:p-8 pt-20 md:pt-8 relative bg-background">
         <div className="max-w-7xl mx-auto animate-fade-in">
           {children}
         </div>
@@ -127,39 +151,39 @@ const Dashboard = () => {
     const fetchData = async () => {
       setIsLoading(true);
       try {
-          const [questions, students, tokens, results] = await Promise.all([
-            api.getQuestions(),
-            api.getStudents(),
-            api.getTokens(),
-            api.getResults()
-          ]);
+        const [questions, students, tokens, results] = await Promise.all([
+          api.getQuestions(),
+          api.getStudents(),
+          api.getTokens(),
+          api.getResults()
+        ]);
 
-          const sumScore = results.reduce((acc, r) => acc + r.score, 0);
-          const avgScore = results.length ? Math.round(sumScore / results.length) : 0;
+        const sumScore = results.reduce((acc, r) => acc + r.score, 0);
+        const avgScore = results.length ? Math.round(sumScore / results.length) : 0;
 
-          const qBreakdown = {
-            pilihan_ganda: questions.filter(q => q.type === 'pilihan_ganda').length,
-            pilihan_ganda_kompleks: questions.filter(q => q.type === 'pilihan_ganda_kompleks').length,
-            mcma: questions.filter(q => q.type === 'multiple_choice_multiple_answer').length
-          };
+        const qBreakdown = {
+          pilihan_ganda: questions.filter(q => q.type === 'pilihan_ganda').length,
+          pilihan_ganda_kompleks: questions.filter(q => q.type === 'pilihan_ganda_kompleks').length,
+          mcma: questions.filter(q => q.type === 'multiple_choice_multiple_answer').length
+        };
 
-          setStats({
-            totalQuestions: questions.length,
-            totalStudents: students.length,
-            totalTokens: tokens.length,
-            averageScore: avgScore,
-            breakdown: qBreakdown
-          });
+        setStats({
+          totalQuestions: questions.length,
+          totalStudents: students.length,
+          totalTokens: tokens.length,
+          averageScore: avgScore,
+          breakdown: qBreakdown
+        });
 
-          const latest = [...results].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).slice(0, 5);
-          setRecentResults(latest);
+        const latest = [...results].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).slice(0, 5);
+        setRecentResults(latest);
       } catch (err) {
-          console.error("Dashboard data load error:", err);
+        console.error("Dashboard data load error:", err);
       } finally {
-          setIsLoading(false);
+        setIsLoading(false);
       }
     };
-    
+
     fetchData();
   }, []);
 

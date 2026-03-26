@@ -36,6 +36,7 @@ export type Question = {
   // Type: pilihan_ganda_kompleks & multiple_choice_multiple_answer
   statements?: Statement[]; // 3 statements for both
   image?: string; // Optional image URL or base64
+  package?: string; // Question package group
 };
 
 export type ExamToken = {
@@ -44,6 +45,7 @@ export type ExamToken = {
   durationMinutes: number;
   questionCount: number;
   subject?: string;
+  package?: string;
   active: boolean;
 };
 
@@ -88,6 +90,7 @@ const mapQuestionFromDb = (q: any): Question => {
   const res: Question = {
     id: q.id,
     subject: q.subject || 'Umum',
+    package: q.package || '',
     question: q.question,
     type: qType,
     image: q.image || ''
@@ -138,6 +141,10 @@ export const api = {
     const { error } = await supabase.from('students').upsert(ss);
     if (error) throw error;
   },
+  deleteStudents: async (ids: string[]) => {
+    const { error } = await supabase.from('students').delete().in('id', ids);
+    if (error) throw error;
+  },
   
   // --- Tokens ---
   getTokens: async () => {
@@ -150,11 +157,19 @@ export const api = {
     })) as ExamToken[];
   },
   addToken: async (token: ExamToken) => {
-    const { error } = await supabase.from('tokens').insert([token]);
+    const payload = {
+        ...token,
+        package: token.package || ''
+    };
+    const { error } = await supabase.from('tokens').insert([payload]);
     if (error) throw error;
   },
   setTokens: async (ts: ExamToken[]) => {
-    const { error } = await supabase.from('tokens').upsert(ts);
+    const payloads = ts.map(t => ({
+        ...t,
+        package: t.package || ''
+    }));
+    const { error } = await supabase.from('tokens').upsert(payloads);
     if (error) throw error;
   },
   getTokenByStr: async (tokenStr: string) => {
@@ -179,6 +194,7 @@ export const api = {
     const payload: any = {
         id: q.id,
         subject: q.subject,
+        package: q.package || '',
         question: q.question,
         type: q.type === 'pilihan_ganda' ? 'MC' : q.type === 'pilihan_ganda_kompleks' ? 'MCMA' : 'TF',
         image: q.image || ''
@@ -191,6 +207,8 @@ export const api = {
         payload.options = q.statements?.map(s => s.text) || [];
         if (q.type === 'pilihan_ganda_kompleks') {
             payload.answer = q.statements?.map((s, i) => s.isCorrect ? String.fromCharCode(65 + i) : null).filter(Boolean).join(',');
+        } else if (q.type === 'multiple_choice_multiple_answer') {
+            payload.answer = q.statements?.map(s => s.correctAnswer).join(',');
         }
     }
 
@@ -200,6 +218,7 @@ export const api = {
   updateQuestion: async (q: Question) => {
     const payload: any = {
         subject: q.subject,
+        package: q.package || '',
         question: q.question,
         type: q.type === 'pilihan_ganda' ? 'MC' : q.type === 'pilihan_ganda_kompleks' ? 'MCMA' : 'TF',
         image: q.image || ''
@@ -212,6 +231,8 @@ export const api = {
         payload.options = q.statements?.map(s => s.text) || [];
         if (q.type === 'pilihan_ganda_kompleks') {
             payload.answer = q.statements?.map((s, i) => s.isCorrect ? String.fromCharCode(65 + i) : null).filter(Boolean).join(',');
+        } else if (q.type === 'multiple_choice_multiple_answer') {
+            payload.answer = q.statements?.map(s => s.correctAnswer).join(',');
         }
     }
 
@@ -222,12 +243,16 @@ export const api = {
     const { error } = await supabase.from('questions').delete().eq('id', id);
     if (error) throw error;
   },
+  deleteQuestions: async (ids: string[]) => {
+    const { error } = await supabase.from('questions').delete().in('id', ids);
+    if (error) throw error;
+  },
   setQuestions: async (qs: Question[]) => {
-    // This is for mass import, complex mapping might be needed but let's keep it simple for now
     const payloads = qs.map(q => {
         const payload: any = {
             id: q.id,
             subject: q.subject,
+            package: q.package || '',
             question: q.question,
             type: q.type === 'pilihan_ganda' ? 'MC' : q.type === 'pilihan_ganda_kompleks' ? 'MCMA' : 'TF',
             image: q.image || ''
@@ -239,6 +264,8 @@ export const api = {
             payload.options = q.statements?.map(s => s.text) || [];
             if (q.type === 'pilihan_ganda_kompleks') {
                 payload.answer = q.statements?.map((s, i) => s.isCorrect ? String.fromCharCode(65 + i) : null).filter(Boolean).join(',');
+            } else if (q.type === 'multiple_choice_multiple_answer') {
+                payload.answer = q.statements?.map(s => s.correctAnswer).join(',');
             }
         }
         return payload;
@@ -376,38 +403,39 @@ export const api = {
 
         const q: Question = {
           id: 'Q-' + Math.random().toString(36).substring(2, 9),
-          subject: cols[0],
-          question: cols[1],
+          package: cols[0],
+          subject: cols[1],
+          question: cols[2],
           type: qType,
-          image: cols[14] || '',
+          image: cols[15] || '',
         };
 
         if (qType === 'pilihan_ganda') {
-          q.option_a = cols[3] || '';
-          q.option_b = cols[4] || '';
-          q.option_c = cols[5] || '';
-          q.option_d = cols[6] || '';
-          q.correct_answer = (cols[7] || 'A').toUpperCase() as any;
+          q.option_a = cols[4] || '';
+          q.option_b = cols[5] || '';
+          q.option_c = cols[6] || '';
+          q.option_d = cols[7] || '';
+          q.correct_answer = (cols[8] || 'A').toUpperCase() as any;
         } else if (qType === 'pilihan_ganda_kompleks') {
           const statements: Statement[] = [];
-          const correctIndices = (cols[7] || '').toUpperCase().split(',').map(s => s.trim());
+          const correctIndices = (cols[8] || '').toUpperCase().split(',').map(s => s.trim());
 
-          if (cols[3] || cols[4] || cols[5]) {
-            if (cols[3]) statements.push({ text: cols[3], isCorrect: correctIndices.includes('A') });
-            if (cols[4]) statements.push({ text: cols[4], isCorrect: correctIndices.includes('B') });
-            if (cols[5]) statements.push({ text: cols[5], isCorrect: correctIndices.includes('C') });
-            if (cols[6]) statements.push({ text: cols[6], isCorrect: correctIndices.includes('D') });
+          if (cols[4] || cols[5] || cols[6] || cols[7]) {
+            if (cols[4]) statements.push({ text: cols[4], isCorrect: correctIndices.includes('A') });
+            if (cols[5]) statements.push({ text: cols[5], isCorrect: correctIndices.includes('B') });
+            if (cols[6]) statements.push({ text: cols[6], isCorrect: correctIndices.includes('C') });
+            if (cols[7]) statements.push({ text: cols[7], isCorrect: correctIndices.includes('D') });
           } else {
-            if (cols[8]) statements.push({ text: cols[8], isCorrect: cols[9] === 'Benar' || cols[9] === 'Sesuai' || cols[9] === 'Tepat' });
-            if (cols[10]) statements.push({ text: cols[10], isCorrect: cols[11] === 'Benar' || cols[11] === 'Sesuai' || cols[11] === 'Tepat' });
-            if (cols[12]) statements.push({ text: cols[12], isCorrect: cols[13] === 'Benar' || cols[13] === 'Sesuai' || cols[13] === 'Tepat' });
+            if (cols[9]) statements.push({ text: cols[9], isCorrect: cols[10] === 'Benar' || cols[10] === 'Sesuai' || cols[10] === 'Tepat' });
+            if (cols[11]) statements.push({ text: cols[11], isCorrect: cols[12] === 'Benar' || cols[12] === 'Sesuai' || cols[12] === 'Tepat' });
+            if (cols[13]) statements.push({ text: cols[13], isCorrect: cols[14] === 'Benar' || cols[14] === 'Sesuai' || cols[14] === 'Tepat' });
           }
           q.statements = statements;
         } else if (qType === 'multiple_choice_multiple_answer') {
           const statements: Statement[] = [];
-          if (cols[8]) statements.push({ text: cols[8], correctAnswer: cols[9] || 'Sesuai' });
-          if (cols[10]) statements.push({ text: cols[10], correctAnswer: cols[11] || 'Sesuai' });
-          if (cols[12]) statements.push({ text: cols[12], correctAnswer: cols[13] || 'Sesuai' });
+          if (cols[9]) statements.push({ text: cols[9], correctAnswer: cols[10] || 'Sesuai' });
+          if (cols[11]) statements.push({ text: cols[11], correctAnswer: cols[12] || 'Sesuai' });
+          if (cols[13]) statements.push({ text: cols[13], correctAnswer: cols[14] || 'Sesuai' });
           q.statements = statements;
         }
         questions.push(q);
@@ -426,6 +454,100 @@ export const api = {
       name: cols[2],
       school: cols[3]
     }));
+  },
+
+  // --- JSON Parsers ---
+  parseStudentJSON: (text: string) => {
+    try {
+      const data = JSON.parse(text);
+      const items = Array.isArray(data) ? data : [data];
+      return items.map((item: any) => ({
+        id: item.id || 'S-' + Math.random().toString(36).substring(2, 9),
+        username: item.username || item.name?.toLowerCase().replace(/\s+/g, '') || 'user' + Math.random().toString(36).substring(2, 5),
+        password: item.password || '123456',
+        name: item.name || 'Unknown',
+        school: item.school || 'Unknown'
+      }));
+    } catch (e) {
+      throw new Error('Format JSON tidak valid');
+    }
+  },
+
+  parseQuestionJSON: (text: string) => {
+    try {
+      const data = JSON.parse(text);
+      const items = Array.isArray(data) ? data : [data];
+      return items.map((item: any) => {
+        // Map from JSON fields to Question type
+        // This accepts both our internal format and a simplified one
+        const qType: QuestionType = item.type || 'pilihan_ganda';
+        const q: Question = {
+          id: item.id || 'Q-' + Math.random().toString(36).substring(2, 9),
+          package: item.package || 'DEFAULT',
+          subject: item.subject || 'Umum',
+          question: item.question || '',
+          type: qType,
+          image: item.image || '',
+        };
+
+        if (qType === 'pilihan_ganda') {
+          q.option_a = item.option_a || '';
+          q.option_b = item.option_b || '';
+          q.option_c = item.option_c || '';
+          q.option_d = item.option_d || '';
+          q.correct_answer = (item.correct_answer || 'A').toUpperCase() as any;
+        } else {
+          q.statements = item.statements || [];
+        }
+        return q;
+      });
+    } catch (e) {
+      throw new Error('Format JSON tidak valid');
+    }
+  },
+
+  // --- Quick Paste Parsers (Beginner Friendly) ---
+  parseStudentQuickPaste: (text: string) => {
+    const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+    return lines.map(line => {
+      // Split by common delimiters: comma, pipe, tab
+      const parts = line.split(/[,|\t]+/).map(p => p.trim());
+      const name = parts[0] || 'Unknown';
+      const school = parts[1] || 'Umum';
+      const username = parts[2] || name.toLowerCase().replace(/\s+/g, '') + Math.floor(Math.random() * 100);
+      const password = parts[3] || '123456';
+
+      return {
+        id: 'S-' + Math.random().toString(36).substring(2, 9),
+        username,
+        password,
+        name,
+        school
+      };
+    });
+  },
+
+  parseQuestionQuickPaste: (text: string) => {
+    // Simplified format: Question | Option A | Option B | Option C | Option D | Answer
+    const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+    return lines.map(line => {
+      const parts = line.split(/[,|\t]+/).map(p => p.trim());
+      if (parts.length < 6) return null;
+
+      return {
+        id: 'Q-' + Math.random().toString(36).substring(2, 9),
+        package: 'QUICK',
+        subject: 'Umum',
+        question: parts[0],
+        type: 'pilihan_ganda' as QuestionType,
+        option_a: parts[1],
+        option_b: parts[2],
+        option_c: parts[3],
+        option_d: parts[4],
+        correct_answer: (parts[5] || 'A').toUpperCase() as any,
+        image: ''
+      };
+    }).filter(Boolean) as Question[];
   }
 };
 

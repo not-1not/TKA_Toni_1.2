@@ -12,6 +12,8 @@ const Tokens = () => {
   const [duration, setDuration] = useState(60);
   const [qCount, setQCount] = useState(25);
   const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
+  const [availablePackages, setAvailablePackages] = useState<string[]>([]);
+  const [selectedPackage, setSelectedPackage] = useState<string>('All');
   
   const fetchData = async () => {
     setIsLoading(true);
@@ -21,8 +23,10 @@ const Tokens = () => {
         api.getQuestions()
       ]);
       setTokens(allTokens);
-      const subjects = Array.from(new Set(allQuestions.map(q => q.subject)));
+      const subjects = Array.from(new Set(allQuestions.map(q => q.subject).filter(Boolean)));
       setAvailableSubjects(subjects);
+      const packs = Array.from(new Set(allQuestions.map(q => q.package).filter(Boolean)));
+      setAvailablePackages(['All', ...packs]);
     } catch (err) {
       console.error(err);
     } finally {
@@ -57,7 +61,10 @@ const Tokens = () => {
         const newTokens: ExamToken[] = [];
         
         selectedSubjects.forEach(subject => {
-          const subjectQs = allQuestions.filter(q => q.subject === subject);
+          const subjectQs = allQuestions.filter(q => 
+            (q.subject === subject || subject === 'All') && 
+            (selectedPackage === 'All' || q.package === selectedPackage)
+          );
           if (qCount > subjectQs.length && subject !== 'All') {
             // Note: confirm might block but it's okay for admin simple flow
             // If strictly needing non-blocking UI, would need a custom modal
@@ -69,6 +76,7 @@ const Tokens = () => {
             durationMinutes: duration,
             questionCount: Math.min(qCount, subjectQs.length || qCount),
             subject: subject,
+            package: selectedPackage === 'All' ? '' : selectedPackage,
             active: true
           });
         });
@@ -213,11 +221,25 @@ const Tokens = () => {
                     type="button" onClick={() => setSelectedSubjects(availableSubjects)}
                     className="text-[10px] font-black uppercase text-primary hover:underline"
                   >Select All</button>
-                   <button 
+                  <button 
                     type="button" onClick={() => setSelectedSubjects([])}
                     className="text-[10px] font-black uppercase text-text-muted hover:underline ml-auto"
                   >Clear</button>
                 </div>
+              </div>
+
+              <div className="space-y-3">
+                <label className="input-label font-black text-xs uppercase tracking-widest text-secondary">2. Select Package (Optional)</label>
+                <select 
+                  value={selectedPackage}
+                  onChange={(e) => setSelectedPackage(e.target.value)}
+                  className="input-field bg-background"
+                  title="Select a specific question package"
+                >
+                  {availablePackages.map(p => (
+                    <option key={p} value={p}>{p === 'All' ? 'All Packages' : p}</option>
+                  ))}
+                </select>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
