@@ -82,7 +82,7 @@ export type ExamState = {
 const mapQuestionFromDb = (q: any): Question => {
   let qTypeRaw = (q.type || '').toUpperCase();
   let qType: QuestionType = 'pilihan_ganda';
-  
+
   if (qTypeRaw === 'MC' || qTypeRaw === 'PILIHAN_GANDA') qType = 'pilihan_ganda';
   else if (qTypeRaw === 'MCMA' || qTypeRaw === 'PILIHAN_GANDA_KOMPLEKS') qType = 'pilihan_ganda_kompleks';
   else if (qTypeRaw === 'TF' || qTypeRaw === 'MULTIPLE_CHOICE_MULTIPLE_ANSWER') qType = 'multiple_choice_multiple_answer';
@@ -107,12 +107,12 @@ const mapQuestionFromDb = (q: any): Question => {
   } else if (qType === 'pilihan_ganda_kompleks') {
     const correctAnswers = (q.answer || '').toUpperCase().split(',').map((s: string) => s.trim());
     res.statements = optionsArray.map((opt: any, idx: number) => {
-        const letter = String.fromCharCode(65 + idx);
-        return { text: typeof opt === 'string' ? opt : (opt.statement || ''), isCorrect: correctAnswers.includes(letter) };
+      const letter = String.fromCharCode(65 + idx);
+      return { text: typeof opt === 'string' ? opt : (opt.statement || ''), isCorrect: correctAnswers.includes(letter) };
     });
   } else if (qType === 'multiple_choice_multiple_answer') {
     res.statements = optionsArray.map((opt: any) => {
-        return { text: opt.statement || (typeof opt === 'string' ? opt : ''), correctAnswer: opt.answer || 'Sesuai' };
+      return { text: opt.statement || (typeof opt === 'string' ? opt : ''), correctAnswer: opt.answer || 'Sesuai' };
     });
   }
   return res;
@@ -145,29 +145,29 @@ export const api = {
     const { error } = await supabase.from('students').delete().in('id', ids);
     if (error) throw error;
   },
-  
+
   // --- Tokens ---
   getTokens: async () => {
     const { data, error } = await supabase.from('tokens').select('*');
     if (error) throw error;
     return (data || []).map(t => ({
-        ...t,
-        durationMinutes: t.durationMinutes,
-        questionCount: t.questionCount
+      ...t,
+      durationMinutes: t.durationMinutes,
+      questionCount: t.questionCount
     })) as ExamToken[];
   },
   addToken: async (token: ExamToken) => {
     const payload = {
-        ...token,
-        package: token.package || ''
+      ...token,
+      package: token.package || ''
     };
     const { error } = await supabase.from('tokens').insert([payload]);
     if (error) throw error;
   },
   setTokens: async (ts: ExamToken[]) => {
     const payloads = ts.map(t => ({
-        ...t,
-        package: t.package || ''
+      ...t,
+      package: t.package || ''
     }));
     const { error } = await supabase.from('tokens').upsert(payloads);
     if (error) throw error;
@@ -192,24 +192,24 @@ export const api = {
   addQuestion: async (q: Question) => {
     // Basic mapping for insertion
     const payload: any = {
-        id: q.id,
-        subject: q.subject,
-        package: q.package || '',
-        question: q.question,
-        type: q.type === 'pilihan_ganda' ? 'MC' : q.type === 'pilihan_ganda_kompleks' ? 'MCMA' : 'TF',
-        image: q.image || ''
+      id: q.id,
+      subject: q.subject,
+      'package': q.package || '',
+      question: q.question,
+      type: q.type === 'pilihan_ganda' ? 'MC' : q.type === 'pilihan_ganda_kompleks' ? 'MCMA' : 'TF',
+      image: q.image || ''
     };
 
     if (q.type === 'pilihan_ganda') {
-        payload.options = [q.option_a, q.option_b, q.option_c, q.option_d];
-        payload.answer = q.correct_answer;
+      payload.options = [q.option_a, q.option_b, q.option_c, q.option_d];
+      payload.answer = q.correct_answer;
     } else {
-        payload.options = q.statements?.map(s => s.text) || [];
-        if (q.type === 'pilihan_ganda_kompleks') {
-            payload.answer = q.statements?.map((s, i) => s.isCorrect ? String.fromCharCode(65 + i) : null).filter(Boolean).join(',');
-        } else if (q.type === 'multiple_choice_multiple_answer') {
-            payload.answer = q.statements?.map(s => s.correctAnswer).join(',');
-        }
+      payload.options = q.statements?.map(s => s.text) || [];
+      if (q.type === 'pilihan_ganda_kompleks') {
+        payload.answer = q.statements?.map((s, i) => s.isCorrect ? String.fromCharCode(65 + i) : null).filter(Boolean).join(',');
+      } else if (q.type === 'multiple_choice_multiple_answer') {
+        payload.answer = q.statements?.map(s => s.correctAnswer).join(',');
+      }
     }
 
     const { error } = await supabase.from('questions').insert([payload]);
@@ -217,23 +217,23 @@ export const api = {
   },
   updateQuestion: async (q: Question) => {
     const payload: any = {
-        subject: q.subject,
-        package: q.package || '',
-        question: q.question,
-        type: q.type === 'pilihan_ganda' ? 'MC' : q.type === 'pilihan_ganda_kompleks' ? 'MCMA' : 'TF',
-        image: q.image || ''
+      subject: q.subject,
+      'package': q.package || '',
+      question: q.question,
+      type: q.type === 'pilihan_ganda' ? 'MC' : q.type === 'pilihan_ganda_kompleks' ? 'MCMA' : 'TF',
+      image: q.image || ''
     };
 
     if (q.type === 'pilihan_ganda') {
-        payload.options = [q.option_a, q.option_b, q.option_c, q.option_d];
-        payload.answer = q.correct_answer;
+      payload.options = [q.option_a, q.option_b, q.option_c, q.option_d];
+      payload.answer = q.correct_answer;
     } else {
-        payload.options = q.statements?.map(s => s.text) || [];
-        if (q.type === 'pilihan_ganda_kompleks') {
-            payload.answer = q.statements?.map((s, i) => s.isCorrect ? String.fromCharCode(65 + i) : null).filter(Boolean).join(',');
-        } else if (q.type === 'multiple_choice_multiple_answer') {
-            payload.answer = q.statements?.map(s => s.correctAnswer).join(',');
-        }
+      payload.options = q.statements?.map(s => s.text) || [];
+      if (q.type === 'pilihan_ganda_kompleks') {
+        payload.answer = q.statements?.map((s, i) => s.isCorrect ? String.fromCharCode(65 + i) : null).filter(Boolean).join(',');
+      } else if (q.type === 'multiple_choice_multiple_answer') {
+        payload.answer = q.statements?.map(s => s.correctAnswer).join(',');
+      }
     }
 
     const { error } = await supabase.from('questions').update(payload).eq('id', q.id);
@@ -249,26 +249,26 @@ export const api = {
   },
   setQuestions: async (qs: Question[]) => {
     const payloads = qs.map(q => {
-        const payload: any = {
-            id: q.id,
-            subject: q.subject,
-            package: q.package || '',
-            question: q.question,
-            type: q.type === 'pilihan_ganda' ? 'MC' : q.type === 'pilihan_ganda_kompleks' ? 'MCMA' : 'TF',
-            image: q.image || ''
-        };
-        if (q.type === 'pilihan_ganda') {
-            payload.options = [q.option_a, q.option_b, q.option_c, q.option_d];
-            payload.answer = q.correct_answer;
-        } else {
-            payload.options = q.statements?.map(s => s.text) || [];
-            if (q.type === 'pilihan_ganda_kompleks') {
-                payload.answer = q.statements?.map((s, i) => s.isCorrect ? String.fromCharCode(65 + i) : null).filter(Boolean).join(',');
-            } else if (q.type === 'multiple_choice_multiple_answer') {
-                payload.answer = q.statements?.map(s => s.correctAnswer).join(',');
-            }
+      const payload: any = {
+        id: q.id,
+        subject: q.subject,
+        'package': q.package || '',
+        question: q.question,
+        type: q.type === 'pilihan_ganda' ? 'MC' : q.type === 'pilihan_ganda_kompleks' ? 'MCMA' : 'TF',
+        image: q.image || ''
+      };
+      if (q.type === 'pilihan_ganda') {
+        payload.options = [q.option_a, q.option_b, q.option_c, q.option_d];
+        payload.answer = q.correct_answer;
+      } else {
+        payload.options = q.statements?.map(s => s.text) || [];
+        if (q.type === 'pilihan_ganda_kompleks') {
+          payload.answer = q.statements?.map((s, i) => s.isCorrect ? String.fromCharCode(65 + i) : null).filter(Boolean).join(',');
+        } else if (q.type === 'multiple_choice_multiple_answer') {
+          payload.answer = q.statements?.map(s => s.correctAnswer).join(',');
         }
-        return payload;
+      }
+      return payload;
     });
     const { error } = await supabase.from('questions').upsert(payloads);
     if (error) throw error;
@@ -299,7 +299,7 @@ export const api = {
     if (error) throw error;
     const result: Record<string, ExamState> = {};
     (data || []).forEach(s => {
-        result[s.studentId] = s;
+      result[s.studentId] = s;
     });
     return result;
   },
@@ -320,7 +320,7 @@ export const api = {
     const { error } = await supabase.from('exam_states').delete().eq('studentId', studentId);
     if (error) throw error;
   },
-  
+
   // --- Helpers ---
   getResultsByStudent: async (studentId: string) => {
     const { data, error } = await supabase.from('results').select('*').eq('studentId', studentId);
@@ -353,34 +353,34 @@ export const api = {
     let inQuotes = false;
 
     for (let i = 0; i < content.length; i++) {
-        const char = content[i];
-        const nextChar = content[i + 1];
+      const char = content[i];
+      const nextChar = content[i + 1];
 
-        if (char === '"') {
-            if (inQuotes && nextChar === '"') {
-                currentCell += '"';
-                i++;
-            } else {
-                inQuotes = !inQuotes;
-            }
-        } else if (char === ',' && !inQuotes) {
-            currentRow.push(currentCell.trim());
-            currentCell = '';
-        } else if ((char === '\r' || char === '\n') && !inQuotes) {
-            if (currentCell || currentRow.length > 0) {
-                currentRow.push(currentCell.trim());
-                rows.push(currentRow);
-                currentRow = [];
-                currentCell = '';
-            }
-            if (char === '\r' && nextChar === '\n') i++;
+      if (char === '"') {
+        if (inQuotes && nextChar === '"') {
+          currentCell += '"';
+          i++;
         } else {
-            currentCell += char;
+          inQuotes = !inQuotes;
         }
+      } else if (char === ',' && !inQuotes) {
+        currentRow.push(currentCell.trim());
+        currentCell = '';
+      } else if ((char === '\r' || char === '\n') && !inQuotes) {
+        if (currentCell || currentRow.length > 0) {
+          currentRow.push(currentCell.trim());
+          rows.push(currentRow);
+          currentRow = [];
+          currentCell = '';
+        }
+        if (char === '\r' && nextChar === '\n') i++;
+      } else {
+        currentCell += char;
+      }
     }
     if (currentCell || currentRow.length > 0) {
-        currentRow.push(currentCell.trim());
-        rows.push(currentRow);
+      currentRow.push(currentCell.trim());
+      rows.push(currentRow);
     }
     return rows;
   },
@@ -396,7 +396,7 @@ export const api = {
       if (cols.length >= 3) {
         let qTypeRaw = cols[2].toUpperCase();
         let qType: any = 'pilihan_ganda';
-        
+
         if (qTypeRaw === 'MC' || qTypeRaw === 'PILIHAN_GANDA') qType = 'pilihan_ganda';
         else if (qTypeRaw === 'MCMA' || qTypeRaw === 'PILIHAN_GANDA_KOMPLEKS') qType = 'pilihan_ganda_kompleks';
         else if (qTypeRaw === 'TF' || qTypeRaw === 'MULTIPLE_CHOICE_MULTIPLE_ANSWER') qType = 'multiple_choice_multiple_answer';
