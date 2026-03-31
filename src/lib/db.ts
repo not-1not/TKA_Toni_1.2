@@ -4,7 +4,12 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-export const supabase = createClient(supabaseUrl, supabaseKey);
+if (!supabaseUrl || !supabaseKey) {
+  console.error('⚠️ Supabase configuration missing!');
+  console.error('Please add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to .env.local');
+}
+
+export const supabase = createClient(supabaseUrl || '', supabaseKey || '');
 
 export type Student = {
   id: string;
@@ -122,34 +127,34 @@ export const api = {
   // --- Students ---
   getStudents: async () => {
     const { data, error } = await supabase.from('students').select('*');
-    if (error) throw error;
+    if (error) throw new Error(`Failed to fetch students: ${error.message}`);
     return data as Student[];
   },
   addStudent: async (student: Student) => {
     const { error } = await supabase.from('students').insert([student]);
-    if (error) throw error;
+    if (error) throw new Error(`Failed to add student: ${error.message}`);
   },
   updateStudent: async (student: Student) => {
     const { error } = await supabase.from('students').update(student).eq('id', student.id);
-    if (error) throw error;
+    if (error) throw new Error(`Failed to update student: ${error.message}`);
   },
   deleteStudent: async (id: string) => {
     const { error } = await supabase.from('students').delete().eq('id', id);
-    if (error) throw error;
+    if (error) throw new Error(`Failed to delete student: ${error.message}`);
   },
   setStudents: async (ss: Student[]) => {
     const { error } = await supabase.from('students').upsert(ss);
-    if (error) throw error;
+    if (error) throw new Error(`Failed to save students: ${error.message}`);
   },
   deleteStudents: async (ids: string[]) => {
     const { error } = await supabase.from('students').delete().in('id', ids);
-    if (error) throw error;
+    if (error) throw new Error(`Failed to delete students: ${error.message}`);
   },
 
   // --- Tokens ---
   getTokens: async () => {
     const { data, error } = await supabase.from('tokens').select('*');
-    if (error) throw error;
+    if (error) throw new Error(`Failed to fetch tokens: ${error.message}`);
     return (data || []).map(t => ({
       ...t,
       durationMinutes: t.durationMinutes,
@@ -162,7 +167,7 @@ export const api = {
       package: token.package || ''
     };
     const { error } = await supabase.from('tokens').insert([payload]);
-    if (error) throw error;
+    if (error) throw new Error(`Failed to add token: ${error.message}`);
   },
   setTokens: async (ts: ExamToken[]) => {
     const payloads = ts.map(t => ({
@@ -170,7 +175,7 @@ export const api = {
       package: t.package || ''
     }));
     const { error } = await supabase.from('tokens').upsert(payloads);
-    if (error) throw error;
+    if (error) throw new Error(`Failed to save tokens: ${error.message}`);
   },
   getTokenByStr: async (tokenStr: string) => {
     const { data, error } = await supabase
@@ -179,14 +184,14 @@ export const api = {
       .ilike('token', tokenStr)
       .eq('active', true)
       .single();
-    if (error && error.code !== 'PGRST116') throw error; // PGRST116 is "no rows returned"
+    if (error && error.code !== 'PGRST116') throw new Error(`Failed to fetch token: ${error.message}`); // PGRST116 is "no rows returned"
     return data as ExamToken | null;
   },
 
   // --- Questions ---
   getQuestions: async () => {
     const { data, error } = await supabase.from('questions').select('*');
-    if (error) throw error;
+    if (error) throw new Error(`Failed to fetch questions: ${error.message}`);
     return (data || []).map(mapQuestionFromDb);
   },
   addQuestion: async (q: Question) => {
@@ -213,7 +218,7 @@ export const api = {
     }
 
     const { error } = await supabase.from('questions').insert([payload]);
-    if (error) throw error;
+    if (error) throw new Error(`Failed to add question: ${error.message}`);
   },
   updateQuestion: async (q: Question) => {
     const payload: any = {
@@ -237,15 +242,15 @@ export const api = {
     }
 
     const { error } = await supabase.from('questions').update(payload).eq('id', q.id);
-    if (error) throw error;
+    if (error) throw new Error(`Failed to update question: ${error.message}`);
   },
   deleteQuestion: async (id: string) => {
     const { error } = await supabase.from('questions').delete().eq('id', id);
-    if (error) throw error;
+    if (error) throw new Error(`Failed to delete question: ${error.message}`);
   },
   deleteQuestions: async (ids: string[]) => {
     const { error } = await supabase.from('questions').delete().in('id', ids);
-    if (error) throw error;
+    if (error) throw new Error(`Failed to delete questions: ${error.message}`);
   },
   setQuestions: async (qs: Question[]) => {
     const payloads = qs.map(q => {
@@ -271,32 +276,32 @@ export const api = {
       return payload;
     });
     const { error } = await supabase.from('questions').upsert(payloads);
-    if (error) throw error;
+    if (error) throw new Error(`Failed to save questions: ${error.message}`);
   },
 
   // --- Results ---
   getResults: async () => {
     const { data, error } = await supabase.from('results').select('*').order('timestamp', { ascending: false });
-    if (error) throw error;
+    if (error) throw new Error(`Failed to fetch results: ${error.message}`);
     return (data || []) as Result[];
   },
   addResult: async (res: Result) => {
     const { error } = await supabase.from('results').insert([res]);
-    if (error) throw error;
+    if (error) throw new Error(`Failed to add result: ${error.message}`);
   },
   updateResult: async (res: Result) => {
     const { error } = await supabase.from('results').update(res).eq('id', res.id);
-    if (error) throw error;
+    if (error) throw new Error(`Failed to update result: ${error.message}`);
   },
   deleteResult: async (id: string) => {
     const { error } = await supabase.from('results').delete().eq('id', id);
-    if (error) throw error;
+    if (error) throw new Error(`Failed to delete result: ${error.message}`);
   },
 
   // --- Exam State (Concurrent Sessions) ---
   getAllExamStates: async () => {
     const { data, error } = await supabase.from('exam_states').select('*');
-    if (error) throw error;
+    if (error) throw new Error(`Failed to fetch exam states: ${error.message}`);
     const result: Record<string, ExamState> = {};
     (data || []).forEach(s => {
       result[s.studentId] = s;
@@ -305,26 +310,26 @@ export const api = {
   },
   getExamState: async (studentId: string) => {
     const { data, error } = await supabase.from('exam_states').select('*').eq('studentId', studentId).single();
-    if (error && error.code !== 'PGRST116') throw error;
+    if (error && error.code !== 'PGRST116') throw new Error(`Failed to fetch exam state: ${error.message}`);
     return data as ExamState | null;
   },
   setExamState: async (state: ExamState) => {
     const { error } = await supabase.from('exam_states').upsert(state);
-    if (error) throw error;
+    if (error) throw new Error(`Failed to save exam state: ${error.message}`);
   },
   updateExamState: async (studentId: string, update: Partial<ExamState>) => {
     const { error } = await supabase.from('exam_states').update(update).eq('studentId', studentId);
-    if (error) throw error;
+    if (error) throw new Error(`Failed to update exam state: ${error.message}`);
   },
   deleteExamState: async (studentId: string) => {
     const { error } = await supabase.from('exam_states').delete().eq('studentId', studentId);
-    if (error) throw error;
+    if (error) throw new Error(`Failed to delete exam state: ${error.message}`);
   },
 
   // --- Helpers ---
   getResultsByStudent: async (studentId: string) => {
     const { data, error } = await supabase.from('results').select('*').eq('studentId', studentId);
-    if (error) throw error;
+    if (error) throw new Error(`Failed to fetch student results: ${error.message}`);
     return (data || []) as Result[];
   },
   clearAll: async () => {

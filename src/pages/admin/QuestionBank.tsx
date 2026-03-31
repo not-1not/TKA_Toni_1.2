@@ -106,9 +106,10 @@ const QuestionBank = () => {
 
       await fetchQuestions();
       onCloseForm();
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to save question:", err);
-      alert("Failed to save question. Please check console for details.");
+      const message = err?.message || err?.toString() || "Unknown error";
+      alert(`Failed to save question: ${message}`);
     } finally {
       setIsLoading(false);
     }

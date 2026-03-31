@@ -65,8 +65,10 @@ const Students = () => {
       }
       await fetchStudents();
       onCloseForm();
-    } catch (err) {
-      alert("Failed to save student");
+    } catch (err: any) {
+      console.error("Failed to save student:", err);
+      const message = err?.message || err?.toString() || "Unknown error";
+      alert(`Failed to save student: ${message}`);
     } finally {
       setIsLoading(false);
     }
