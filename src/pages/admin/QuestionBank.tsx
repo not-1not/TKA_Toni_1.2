@@ -94,6 +94,15 @@ const QuestionBank = () => {
     e.preventDefault();
     if (!formData.subject || !formData.question) return alert("Subject and Question required");
 
+    if (formData.type === 'pilihan_ganda') {
+      if (!formData.option_a || !formData.option_b || !formData.option_c || !formData.option_d) return alert("All options (A-D) are required for Pilihan Ganda");
+      if (!formData.correct_answer) return alert("Correct answer is required for Pilihan Ganda");
+    } else {
+      const statements = formData.statements || [];
+      if (statements.length !== 3 || statements.some(s => !s.text?.trim())) return alert("All 3 statements are required for Pilihan Ganda Kompleks / MCMA");
+      if (formData.type === 'multiple_choice_multiple_answer' && statements.some(s => !s.correctAnswer?.trim())) return alert("All statement answers (Sesuai/Tidak Sesuai) are required for MCMA");
+    }
+
     setIsLoading(true);
     try {
       const newQuestion = { ...formData, id: editingId || 'Q-' + Date.now().toString(36) } as Question;
@@ -198,20 +207,29 @@ const QuestionBank = () => {
           q.option_d = parts[7] || '';
           q.correct_answer = (parts[8] || 'A') as any;
         } else {
-          // For PK/MCMA, we expect simpler parsing for now
-          // Format for PK: A,B
-          // Format for MCMA: S,T,S
-          const optA = parts[4] || '';
-          const optB = parts[5] || '';
-          const optC = parts[6] || '';
-          const optD = parts[7] || '';
-          const ans = parts[8] || '';
+          // For PK/MCMA, we expect simpler parsing
+          // PK format: <package>|<subject>|<question>|PK|<stmt1>|<stmt2>|<stmt3>|<unused>|<correct letters>
+          // MCMA format: <package>|<subject>|<question>|MCMA|<stmt1>|<stmt2>|<stmt3>|<unused>|<S/T/S> (e.g. "S,T,S")
+          const stmt1 = parts[4] || '';
+          const stmt2 = parts[5] || '';
+          const stmt3 = parts[6] || '';
+          const answer = (parts[8] || '').trim();
 
-          q.statements = [
-            { text: optA, isCorrect: ans.includes('A'), correctAnswer: ans.includes('S') ? 'Sesuai' : 'Tidak Sesuai' },
-            { text: optB, isCorrect: ans.includes('B'), correctAnswer: ans.includes('T') ? 'Sesuai' : 'Tidak Sesuai' },
-            { text: optC, isCorrect: ans.includes('C'), correctAnswer: ans.includes('U') ? 'Sesuai' : 'Tidak Sesuai' },
-          ];
+          if (type === 'pilihan_ganda_kompleks') {
+            const selected = answer.toUpperCase().split(/[,;\s]+/).filter(Boolean);
+            q.statements = [
+              { text: stmt1, isCorrect: selected.includes('A') },
+              { text: stmt2, isCorrect: selected.includes('B') },
+              { text: stmt3, isCorrect: selected.includes('C') },
+            ];
+          } else {
+            const answerFlags = answer.split(/[,;\s]+/).map(a => (a||'Sesuai').trim() || 'Sesuai');
+            q.statements = [
+              { text: stmt1, correctAnswer: answerFlags[0] || 'Sesuai' },
+              { text: stmt2, correctAnswer: answerFlags[1] || 'Sesuai' },
+              { text: stmt3, correctAnswer: answerFlags[2] || 'Sesuai' },
+            ];
+          }
         }
         return q;
       }).filter(q => q.question);

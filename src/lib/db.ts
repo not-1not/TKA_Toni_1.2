@@ -116,8 +116,11 @@ const mapQuestionFromDb = (q: any): Question => {
       return { text: typeof opt === 'string' ? opt : (opt.statement || ''), isCorrect: correctAnswers.includes(letter) };
     });
   } else if (qType === 'multiple_choice_multiple_answer') {
-    res.statements = optionsArray.map((opt: any) => {
-      return { text: opt.statement || (typeof opt === 'string' ? opt : ''), correctAnswer: opt.answer || 'Sesuai' };
+    const answerArray = (q.answer || '').split(',').map((a: string) => a.trim() || 'Sesuai');
+    res.statements = optionsArray.map((opt: any, idx: number) => {
+      const statementText = typeof opt === 'string' ? opt : (opt?.statement || '');
+      const correctAnswer = answerArray[idx] || 'Sesuai';
+      return { text: statementText, correctAnswer };
     });
   }
   return res;
