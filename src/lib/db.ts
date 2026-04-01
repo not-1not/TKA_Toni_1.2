@@ -178,20 +178,44 @@ export const api = {
     })) as ExamToken[];
   },
   addToken: async (token: ExamToken) => {
-    const payload = {
+    const payload: any = {
       ...token,
       package: token.package || ''
     };
-    const { error } = await supabase.from('tokens').insert([payload]);
-    if (error) throw new Error(`Failed to add token: ${error.message}`);
+    let result = await supabase.from('tokens').insert([payload]);
+    if (result.error) {
+      const message = result.error.message || '';
+      if (message.toLowerCase().includes("could not find the 'package' column")) {
+        // Fallback: remove package field and retry
+        delete payload.package;
+        result = await supabase.from('tokens').insert([payload]);
+        if (result.error) throw new Error(`Failed to add token (fallback): ${result.error.message}`);
+        return;
+      }
+      throw new Error(`Failed to add token: ${message}`);
+    }
   },
   setTokens: async (ts: ExamToken[]) => {
     const payloads = ts.map(t => ({
       ...t,
       package: t.package || ''
     }));
-    const { error } = await supabase.from('tokens').upsert(payloads);
-    if (error) throw new Error(`Failed to save tokens: ${error.message}`);
+    let result = await supabase.from('tokens').upsert(payloads);
+    if (result.error) {
+      const message = result.error.message || '';
+      if (message.toLowerCase().includes("could not find the 'package' column")) {
+        // Fallback: remove package field and retry
+        const cleanPayloads = payloads.map(p => {
+          const cp = { ...p };
+          delete cp.package;
+          return cp;
+        });
+        result = await supabase.from('tokens').upsert(cleanPayloads);
+        if (result.error) throw new Error(`Failed to save tokens (fallback): ${result.error.message}`);
+        return;
+      }
+      throw new Error(`Failed to save tokens: ${message}`);
+    }
   },
   getTokenByStr: async (tokenStr: string) => {
     const { data, error } = await supabase

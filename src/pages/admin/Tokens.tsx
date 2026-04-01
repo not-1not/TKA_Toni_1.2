@@ -89,8 +89,9 @@ const Tokens = () => {
         await fetchData();
         setSelectedSubjects([]);
         alert(`Successfully generated ${newTokens.length} tokens.`);
-    } catch (err) {
-        alert("Failed to create tokens");
+    } catch (err: any) {
+        console.error("Token creation error:", err);
+        alert("Failed to create tokens: " + (err.message || String(err)));
     } finally {
         setIsLoading(false);
     }
@@ -106,8 +107,9 @@ const Tokens = () => {
         });
         await api.setTokens(all);
         await fetchData();
-    } catch (err) {
-        alert("Failed to toggle token");
+    } catch (err: any) {
+        console.error("Toggle token error:", err);
+        alert("Failed to toggle token: " + (err.message || String(err)));
     } finally {
         setIsLoading(false);
     }
@@ -125,8 +127,9 @@ const Tokens = () => {
         await api.setTokens(all);
         await fetchData();
         setSelectedIds([]);
-    } catch (err) {
-        alert("Failed to update tokens");
+    } catch (err: any) {
+        console.error("Batch toggle error:", err);
+        alert("Failed to update tokens: " + (err.message || String(err)));
     } finally {
         setIsLoading(false);
     }
@@ -141,8 +144,9 @@ const Tokens = () => {
           await api.setTokens(remaining);
           await fetchData();
           setSelectedIds([]);
-      } catch (err) {
-          alert("Failed to delete tokens");
+      } catch (err: any) {
+          console.error("Batch delete error:", err);
+          alert("Failed to delete tokens: " + (err.message || String(err)));
       } finally {
           setIsLoading(false);
       }
