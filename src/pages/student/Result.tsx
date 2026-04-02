@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { api, Result as ResultType, Question } from '../../lib/db';
-import { Award, LogOut, CheckCircle, XCircle, BarChart3 } from 'lucide-react';
+import { api, Result as ResultType, Question, ExamToken } from '../../lib/db';
+import { Award, LogOut, CheckCircle, XCircle, BarChart3, Eye, Lock } from 'lucide-react';
 import { AnswerAnalysis } from '../../components/AnswerAnalysis';
 
 const Result = () => {
@@ -13,6 +13,8 @@ const Result = () => {
   const [result, setResult] = useState<ResultType | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [showAnalysis, setShowAnalysis] = useState(false);
+  const [resultsVisible, setResultsVisible] = useState(true);
+  const [examToken, setExamToken] = useState<ExamToken | null>(null);
 
   useEffect(() => {
     const fetchResult = async () => {
@@ -23,15 +25,18 @@ const Result = () => {
       }
 
       try {
+          let foundResult: ResultType | null = null;
+          
           if (resultId) {
             const results = await api.getResults();
-            const found = results.find(r => r.id === resultId);
-            if (found) setResult(found);
+            foundResult = results.find(r => r.id === resultId) || null;
+            if (foundResult) setResult(foundResult);
             else navigate('/login');
           } else {
             const thisStudent = await api.getResultsByStudent(auth.student?.id || '');
             if (thisStudent.length > 0) {
-              setResult(thisStudent[thisStudent.length - 1]);
+              foundResult = thisStudent[thisStudent.length - 1];
+              setResult(foundResult);
             } else {
               navigate('/login'); 
             }
@@ -40,6 +45,17 @@ const Result = () => {
           // Fetch all questions for display
           const allQuestions = await api.getQuestions();
           setQuestions(allQuestions);
+          
+          // Fetch exam tokens to check if results are visible
+          if (foundResult) {
+            const tokens = await api.getTokens();
+            const studentExamToken = tokens.find(t => t.id === foundResult.studentId);
+            
+            // Check if admin has hidden results for this exam
+            const isVisible = studentExamToken?.resultsVisible !== false; // Default to true
+            setResultsVisible(isVisible);
+            if (studentExamToken) setExamToken(studentExamToken);
+          }
       } catch (err) {
           console.error("Result load error:", err);
           navigate('/login');
@@ -50,6 +66,43 @@ const Result = () => {
   }, [location, auth.student, navigate]);
 
   if (!result) return <div className="p-8 text-center animate-pulse font-bold text-xl text-primary mt-12">Loading Results...</div>;
+
+  // Show locked message if admin has hidden results
+  if (!resultsVisible) {
+    return (
+      <div className="flex flex-col items-center justify-center p-4 min-h-screen bg-background relative overflow-hidden">
+        <div className="absolute top-[-100px] left-[-100px] w-64 h-64 bg-primary/10 rounded-full blur-3xl z-0"></div>
+        <div className="absolute bottom-[-100px] right-[-100px] w-64 h-64 bg-secondary/10 rounded-full blur-3xl z-0"></div>
+
+        <div className="w-full max-w-lg relative z-10">
+          <div className="card max-w-lg mx-auto text-center p-8 border-4 border-warning shadow-2xl glass mb-8">
+            <div className="inline-flex items-center justify-center w-24 h-24 rounded-full bg-gradient-to-br from-warning to-warning/50 text-white mb-6 shadow-lg shadow-warning/30">
+              <Lock size={48} />
+            </div>
+            
+            <h2 className="text-3xl font-black text-text-main mb-2">Hasil Belum Tersedia</h2>
+            <p className="text-text-muted text-lg font-medium mb-8">Admin belum membuka akses untuk melihat hasil ujian Anda.</p>
+            
+            <div className="bg-background rounded-2xl p-6 mb-8 border border-border shadow-inner">
+              <div className="text-sm font-bold text-warning uppercase tracking-widest mb-4">Status: Terkunci</div>
+              <p className="text-text-muted mb-4">Tunggu hingga guru/admin membuka hasil ujian.</p>
+              <p className="text-xs text-text-muted">Anda akan menerima notifikasi ketika hasil siap ditampilkan.</p>
+            </div>
+
+            <button 
+              onClick={() => {
+                logout();
+                navigate('/login');
+              }} 
+              className="btn btn-outline hover:bg-surface w-full py-3 px-8 text-lg"
+            >
+              <LogOut size={24} /> Logout
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const totalQs = result.correct + result.wrong;
 

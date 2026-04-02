@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { AdminLayout } from './Dashboard';
 import { api, ExamToken } from '../../lib/db';
-import { Plus, Trash2, KeyRound, Copy, CheckSquare, Square, Zap, ZapOff, BookOpen, Layers } from 'lucide-react';
+import { Plus, Trash2, KeyRound, Copy, CheckSquare, Square, Zap, ZapOff, BookOpen, Layers, Eye, EyeOff } from 'lucide-react';
 import { AnimatePresence } from 'framer-motion';
 
 const Tokens = () => {
@@ -110,6 +110,24 @@ const Tokens = () => {
     } catch (err: any) {
         console.error("Toggle token error:", err);
         alert("Failed to toggle token: " + (err.message || String(err)));
+    } finally {
+        setIsLoading(false);
+    }
+  };
+
+  const handleToggleResultsVisible = async (id: string, currentStatus: boolean | undefined) => {
+    setIsLoading(true);
+    try {
+        const currentBatch = await api.getTokens();
+        const all = currentBatch.map(tok => {
+          if (tok.id === id) return { ...tok, resultsVisible: !currentStatus };
+          return tok;
+        });
+        await api.setTokens(all);
+        await fetchData();
+    } catch (err: any) {
+        console.error("Toggle results visibility error:", err);
+        alert("Failed to toggle results visibility: " + (err.message || String(err)));
     } finally {
         setIsLoading(false);
     }
@@ -368,6 +386,19 @@ const Tokens = () => {
                       }`}
                     >
                       {t.active ? 'Stop' : 'Start'}
+                    </button>
+
+                    <button 
+                      onClick={() => handleToggleResultsVisible(t.id, t.resultsVisible)}
+                      className={`btn text-[10px] font-black uppercase py-2 px-4 shadow-sm border-2 ${
+                        t.resultsVisible !== false
+                        ? 'border-secondary/20 text-secondary hover:bg-secondary hover:text-white' 
+                        : 'border-warning/20 text-warning hover:bg-warning hover:text-white'
+                      }`}
+                      title="Toggle if students can see results"
+                    >
+                      {t.resultsVisible !== false ? <Eye size={14} className="inline mr-1" /> : <EyeOff size={14} className="inline mr-1" />}
+                      {t.resultsVisible !== false ? 'Show' : 'Hide'}
                     </button>
                   </div>
                 ))

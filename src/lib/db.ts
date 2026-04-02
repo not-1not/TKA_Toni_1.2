@@ -52,6 +52,7 @@ export type ExamToken = {
   subject?: string;
   package?: string;
   active: boolean;
+  resultsVisible?: boolean; // Admin dapat menampilkan/menyembunyikan hasil siswa
 };
 
 export type Answer = {
