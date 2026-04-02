@@ -79,8 +79,9 @@ export type Result = {
   wrong: number;
   score: number;
   timestamp: string;
-  answerDetails?: AnswerDetail[]; // Detailed answer analysis
-  durationSeconds?: number; // Exam duration in seconds
+  answerDetails?: AnswerDetail[]; // For TypeScript only - stored as JSON string in DB
+  durationSeconds?: number; // For TypeScript only - stored as JSON string in DB
+  details?: string; // JSON string containing answerDetails and durationSeconds
 };
 
 export type ExamState = {
@@ -366,14 +367,63 @@ export const api = {
   getResults: async () => {
     const { data, error } = await supabase.from('results').select('*').order('timestamp', { ascending: false });
     if (error) throw new Error(`Failed to fetch results: ${error.message}`);
-    return (data || []) as Result[];
+    
+    // Parse details JSON back to answerDetails and durationSeconds
+    const results = (data || []).map(r => {
+      let answerDetails: AnswerDetail[] | undefined;
+      let durationSeconds: number | undefined;
+      
+      if (r.details) {
+        try {
+          const detailsData = JSON.parse(r.details);
+          answerDetails = detailsData.answerDetails;
+          durationSeconds = detailsData.durationSeconds;
+        } catch (e) {
+          console.warn('Failed to parse result details:', e);
+        }
+      }
+      
+      return {
+        ...r,
+        answerDetails,
+        durationSeconds
+      } as Result;
+    });
+    
+    return results;
   },
   addResult: async (res: Result) => {
-    const { error } = await supabase.from('results').insert([res]);
+    // Convert answerDetails and durationSeconds to JSON string in details column
+    const detailsData = {
+      answerDetails: res.answerDetails,
+      durationSeconds: res.durationSeconds
+    };
+    
+    const dbResult = {
+      ...res,
+      details: JSON.stringify(detailsData),
+      answerDetails: undefined, // Remove from top level
+      durationSeconds: undefined // Remove from top level
+    };
+    
+    const { error } = await supabase.from('results').insert([dbResult]);
     if (error) throw new Error(`Failed to add result: ${error.message}`);
   },
   updateResult: async (res: Result) => {
-    const { error } = await supabase.from('results').update(res).eq('id', res.id);
+    // Convert answerDetails and durationSeconds to JSON string in details column
+    const detailsData = {
+      answerDetails: res.answerDetails,
+      durationSeconds: res.durationSeconds
+    };
+    
+    const dbResult = {
+      ...res,
+      details: JSON.stringify(detailsData),
+      answerDetails: undefined, // Remove from top level
+      durationSeconds: undefined // Remove from top level
+    };
+    
+    const { error } = await supabase.from('results').update(dbResult).eq('id', res.id);
     if (error) throw new Error(`Failed to update result: ${error.message}`);
   },
   deleteResult: async (id: string) => {
@@ -413,7 +463,30 @@ export const api = {
   getResultsByStudent: async (studentId: string) => {
     const { data, error } = await supabase.from('results').select('*').eq('studentId', studentId);
     if (error) throw new Error(`Failed to fetch student results: ${error.message}`);
-    return (data || []) as Result[];
+    
+    // Parse details JSON back to answerDetails and durationSeconds
+    const results = (data || []).map(r => {
+      let answerDetails: AnswerDetail[] | undefined;
+      let durationSeconds: number | undefined;
+      
+      if (r.details) {
+        try {
+          const detailsData = JSON.parse(r.details);
+          answerDetails = detailsData.answerDetails;
+          durationSeconds = detailsData.durationSeconds;
+        } catch (e) {
+          console.warn('Failed to parse result details:', e);
+        }
+      }
+      
+      return {
+        ...r,
+        answerDetails,
+        durationSeconds
+      } as Result;
+    });
+    
+    return results;
   },
   clearAll: async () => {
     // DANGEROUS: Usually not used in real Supabase production except for dev
