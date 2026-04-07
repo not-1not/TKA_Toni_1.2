@@ -232,11 +232,11 @@ const Exam = () => {
                   : 'border-neutral-200 hover:border-blue-300 hover:bg-neutral-50'
                   }`}
               >
-                <div className={`flex-shrink-0 w-7 h-7 sm:w-8 sm:h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center mr-3 sm:mr-6 font-bold border-2 transition-all ${isSelected ? 'bg-blue-500 border-blue-500 text-white' : 'bg-transparent border-neutral-300 text-neutral-500 group-hover:border-blue-300'
+                <div className={`flex-shrink-0 w-7 h-7 sm:w-8 sm:h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center mr-3 sm:mr-6 font-bold border-2 transition-colors ${isSelected ? 'bg-blue-500 border-blue-500 text-white' : 'bg-transparent border-neutral-300 text-neutral-500 group-hover:border-blue-300'
                   }`}>
                   {opt}
                 </div>
-                <div className={`flex-1 font-medium transition-all ${isSelected ? 'text-blue-900' : 'text-neutral-700'}`}>
+                <div className={`flex-1 font-medium transition-colors ${isSelected ? 'text-blue-900' : 'text-neutral-700'}`}>
                   {currentQ[`option_${opt.toLowerCase()}` as keyof Question] as string}
                 </div>
               </button>
@@ -267,7 +267,7 @@ const Exam = () => {
                   : 'border-neutral-200 hover:border-blue-300 hover:bg-neutral-50'
                   }`}
               >
-                <div className={`mt-1 flex-shrink-0 w-5 h-5 sm:w-6 sm:h-6 rounded border-2 mr-3 sm:mr-4 flex items-center justify-center transition-all ${isSelected ? 'bg-blue-500 border-blue-500 text-white' : 'bg-white border-neutral-300'
+                <div className={`mt-1 flex-shrink-0 w-5 h-5 sm:w-6 sm:h-6 rounded border-2 mr-3 sm:mr-4 flex items-center justify-center transition-colors ${isSelected ? 'bg-blue-500 border-blue-500 text-white' : 'bg-white border-neutral-300'
                   }`}>
                   {isSelected && <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-white rounded-sm" />}
                 </div>
@@ -305,7 +305,7 @@ const Exam = () => {
                   {displayIndex + 1}. <RichText html={stmt?.text || ''} className="inline" />
                 </div>
                 <div className="flex gap-2 sm:gap-4">
-                  {pair.map((opt: string) => (
+                  {pair.map(opt => (
                     <button
                       key={opt}
                       onClick={() => handleStatementCheck(origIndex, opt)}
@@ -358,7 +358,7 @@ const Exam = () => {
             {/* Mobile Sidebar Toggle */}
             <button
               onClick={() => setShowSidebar(!showSidebar)}
-              className="md:hidden w-10 h-10 flex items-center justify-center bg-blue-700 hover:bg-blue-800 rounded-lg transition-all active:scale-95"
+              className="md:hidden w-10 h-10 flex items-center justify-center bg-blue-700 hover:bg-blue-800 rounded-lg transition-colors active:scale-95"
               title="Daftar Soal"
             >
               {showSidebar ? <X size={20} /> : <Menu size={20} />}
@@ -410,14 +410,14 @@ const Exam = () => {
               </span>
               <button
                 onClick={() => setFontSize(Math.max(14, fontSize - 2))}
-                className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center bg-white border border-neutral-200 rounded hover:bg-neutral-100 text-neutral-600 active:scale-95 "
+                className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center bg-white border border-neutral-200 rounded hover:bg-neutral-100 text-neutral-600 active:scale-95 transition-transform"
                 title="Perkecil"
               >
                 <Minus size={14} />
               </button>
               <button
                 onClick={() => setFontSize(Math.min(40, fontSize + 2))}
-                className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center bg-white border border-neutral-200 rounded hover:bg-neutral-100 text-neutral-600 active:scale-95 "
+                className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center bg-white border border-neutral-200 rounded hover:bg-neutral-100 text-neutral-600 active:scale-95 transition-transform"
                 title="Perbesar"
               >
                 <Plus size={14} />
@@ -447,7 +447,7 @@ const Exam = () => {
           {/* Question Footer Controls - Mobile Optimized */}
           <div className="bg-neutral-50 border-t border-neutral-200 p-2 sm:p-4 lg:p-6 flex flex-wrap justify-between items-center gap-2 sm:gap-4">
             <button
-              className="px-3 sm:px-6 lg:px-8 py-2 sm:py-3 rounded text-neutral-700 font-bold border-2 border-neutral-300 bg-white hover:bg-neutral-100 transition-all disabled:opacity-50 text-xs sm:text-sm active:scale-95 "
+              className="px-3 sm:px-6 lg:px-8 py-2 sm:py-3 rounded text-neutral-700 font-bold border-2 border-neutral-300 bg-white hover:bg-neutral-100 transition-colors disabled:opacity-50 text-xs sm:text-sm active:scale-95 transition-transform"
               onClick={() => setCurrentIndex(prev => Math.max(0, prev - 1))}
               disabled={currentIndex === 0}
             >
@@ -455,7 +455,7 @@ const Exam = () => {
             </button>
 
             <button
-              className={`px-3 sm:px-6 py-2 sm:py-3 rounded font-bold border-2 transition-all flex items-center gap-1 sm:gap-2 text-xs sm:text-sm active:scale-95  ${isDoubt
+              className={`px-3 sm:px-6 py-2 sm:py-3 rounded font-bold border-2 transition-colors flex items-center gap-1 sm:gap-2 text-xs sm:text-sm active:scale-95 transition-transform ${isDoubt
                 ? 'border-yellow-500 bg-yellow-500 text-white'
                 : 'border-yellow-500 text-yellow-600 bg-yellow-50 hover:bg-yellow-100'
                 }`}
@@ -469,14 +469,14 @@ const Exam = () => {
 
             {currentIndex < questions.length - 1 ? (
               <button
-                className="px-3 sm:px-6 lg:px-8 py-2 sm:py-3 rounded text-white font-bold border-2 border-blue-600 bg-blue-500 hover:bg-blue-600 transition-all text-xs sm:text-sm active:scale-95 "
+                className="px-3 sm:px-6 lg:px-8 py-2 sm:py-3 rounded text-white font-bold border-2 border-blue-600 bg-blue-500 hover:bg-blue-600 transition-colors text-xs sm:text-sm active:scale-95 transition-transform"
                 onClick={() => setCurrentIndex(prev => Math.min(questions.length - 1, prev + 1))}
               >
                 Next →
               </button>
             ) : (
               <button
-                className="px-3 sm:px-6 lg:px-8 py-2 sm:py-3 rounded text-white font-bold border-2 border-green-600 bg-green-500 hover:bg-green-600 transition-all text-xs sm:text-sm shadow-md animate-pulse active:scale-95 "
+                className="px-3 sm:px-6 lg:px-8 py-2 sm:py-3 rounded text-white font-bold border-2 border-green-600 bg-green-500 hover:bg-green-600 transition-colors text-xs sm:text-sm shadow-md animate-pulse active:scale-95 transition-transform"
                 onClick={() => navigate('/review')}
               >
                 Selesai ✓
@@ -490,7 +490,7 @@ const Exam = () => {
           fixed sm:relative inset-y-0 right-0 z-30
           w-72 sm:w-72 lg:w-80
           flex flex-col bg-white rounded-l-2xl sm:rounded-xl shadow-2xl border border-neutral-200
-          transform  duration-300 ease-in-out
+          transform transition-transform duration-300 ease-in-out
           ${showSidebar ? 'translate-x-0' : 'translate-x-full sm:translate-x-0'}
           h-full sm:h-auto mt-0
         `}>
@@ -519,9 +519,6 @@ const Exam = () => {
                 const isDoubtful = !!examState.doubt[q.id];
                 const isActive = idx === currentIndex;
 
-                const answerValue = examState.answers[q.id];
-                const displayAnswer = typeof answerValue === 'string' ? answerValue : '';
-
                 let btnClass = "w-full aspect-square rounded-lg font-bold flex flex-col items-center justify-center transition-all border-2 relative select-none active:scale-95 ";
 
                 if (isActive) btnClass += "ring-2 ring-blue-400 ring-offset-1 scale-105 z-10 ";
@@ -544,8 +541,8 @@ const Exam = () => {
                     }}
                   >
                     <span className="text-base sm:text-lg leading-none">{idx + 1}</span>
-                    {isAnswered && !isDoubtful && q.type === 'pilihan_ganda' && displayAnswer && (
-                      <span className="text-[8px] sm:text-[10px] mt-0.5 opacity-80 uppercase">{displayAnswer}</span>
+                    {isAnswered && !isDoubtful && q.type === 'pilihan_ganda' && (
+                      <span className="text-[8px] sm:text-[10px] mt-0.5 opacity-80 uppercase">{examState.answers[q.id]}</span>
                     )}
                     {isAnswered && !isDoubtful && q.type !== 'pilihan_ganda' && (
                       <span className="text-[8px] sm:text-[10px] mt-0.5 opacity-80">✓</span>
@@ -593,10 +590,10 @@ const Exam = () => {
               Apakah Anda yakin ingin keluar dari halaman ujian? Waktu ujian Anda <strong className="text-red-500">akan terus berjalan</strong> meskipun Anda meninggalkan halaman ini.
             </p>
             <div className="flex gap-3 sm:gap-4 justify-end flex-col sm:flex-row">
-              <button className="px-4 sm:px-6 py-2 sm:py-3 rounded font-bold border-2 border-neutral-300 text-neutral-700 hover:bg-neutral-100 transition-all text-sm sm:text-base" onClick={() => blocker.reset?.()}>
+              <button className="px-4 sm:px-6 py-2 sm:py-3 rounded font-bold border-2 border-neutral-300 text-neutral-700 hover:bg-neutral-100 transition-colors text-sm sm:text-base" onClick={() => blocker.reset?.()}>
                 Kembali Ujian
               </button>
-              <button className="px-4 sm:px-6 py-2 sm:py-3 rounded font-bold bg-red-500 text-white hover:bg-red-600 shadow-md transition-all text-sm sm:text-base" onClick={() => blocker.proceed?.()}>
+              <button className="px-4 sm:px-6 py-2 sm:py-3 rounded font-bold bg-red-500 text-white hover:bg-red-600 shadow-md transition-colors text-sm sm:text-base" onClick={() => blocker.proceed?.()}>
                 Tinggalkan
               </button>
             </div>

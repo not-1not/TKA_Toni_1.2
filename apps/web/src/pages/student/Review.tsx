@@ -21,70 +21,67 @@ const Review = () => {
   const submitExam = useCallback(async () => {
     if (!examState || !auth.student || isSubmitting) return;
     setIsSubmitting(true);
-    
+
     try {
-        const { correct, wrong, score } = calculateScore(questions, examState.answers);
-        
-        // Build answer details for analysis
-        const answerDetails: AnswerDetail[] = questions.map(q => {
-          const studentAnswer = examState.answers[q.id];
-          let correctAnswer: any;
-          let isCorrect = false;
+      const { correct, wrong, score } = calculateScore(questions, examState.answers);
 
-          if (q.type === 'pilihan_ganda') {
-            correctAnswer = q.correct_answer;
-            isCorrect = studentAnswer === q.correct_answer;
-          } else if (q.type === 'pilihan_ganda_kompleks') {
-            const selectedIndices = (studentAnswer as number[]) || [];
-            const correctIndices = q.statements?.map((s, i) => s.isCorrect ? i : -1).filter(i => i !== -1) || [];
-            correctAnswer = correctIndices;
-            isCorrect = selectedIndices.length === correctIndices.length && 
-                        selectedIndices.every(i => correctIndices.includes(i));
-          } else if (q.type === 'multiple_choice_multiple_answer') {
-            const statementAnswers = (studentAnswer as Record<number, string>) || {};
-            correctAnswer = q.statements?.map(s => s.correctAnswer) || [];
-            isCorrect = q.statements?.every((s, i) => statementAnswers[i] === s.correctAnswer);
-          }
+      const answerDetails: AnswerDetail[] = questions.map(q => {
+        const studentAnswer = examState.answers[q.id];
+        let correctAnswer: any;
+        let isCorrect = false;
 
-          return {
-            questionId: q.id,
-            question: q.question,
-            type: q.type,
-            studentAnswer: studentAnswer || null,
-            correctAnswer,
-            isCorrect,
-            subject: q.subject
-          };
-        });
-        
-        const result: Result = {
-          id: 'RES-' + Math.random().toString(36).substring(2, 9),
-          studentId: auth.student.id,
-          studentName: auth.student.name,
-          school: auth.student.school,
-          correct,
-          wrong,
-          score,
-          timestamp: new Date().toISOString(),
-          answerDetails,
-          durationSeconds: examState.endTime ? Math.round((examState.endTime - (examState.startTime || 0)) / 1000) : 0
+        if (q.type === 'pilihan_ganda') {
+          correctAnswer = q.correct_answer;
+          isCorrect = studentAnswer === q.correct_answer;
+        } else if (q.type === 'pilihan_ganda_kompleks') {
+          const selectedIndices = (studentAnswer as number[]) || [];
+          const correctIndices = q.statements?.map((s, i) => s.isCorrect ? i : -1).filter(i => i !== -1) || [];
+          correctAnswer = correctIndices;
+          isCorrect = selectedIndices.length === correctIndices.length &&
+            selectedIndices.every(i => correctIndices.includes(i));
+        } else if (q.type === 'multiple_choice_multiple_answer') {
+          const statementAnswers = (studentAnswer as Record<number, string>) || {};
+          correctAnswer = q.statements?.map(s => s.correctAnswer) || [];
+          isCorrect = q.statements?.every((s, i) => statementAnswers[i] === s.correctAnswer);
+        }
+
+        return {
+          questionId: q.id,
+          question: q.question,
+          type: q.type,
+          studentAnswer: studentAnswer || null,
+          correctAnswer,
+          isCorrect,
+          subject: q.subject
         };
-        
-        await api.addResult(result);
-        await api.updateExamState(auth.student.id, { submitted: true });
-        
-        // Pass resultID securely
-        navigate('/result', { state: { resultId: result.id }, replace: true });
-    } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : String(err);
-        console.error("Submit error:", errorMsg);
-        alert(`Failed to submit exam: ${errorMsg}`);
-    } finally {
-        setIsSubmitting(false);
-    }
-  }, [auth.student, examState, questions, navigate]);
+      });
 
-  const loadReview = async () => {
+      const result: Result = {
+        id: 'RES-' + Math.random().toString(36).substring(2, 9),
+        studentId: auth.student.id,
+        studentName: auth.student.name,
+        school: auth.student.school,
+        correct,
+        wrong,
+        score,
+        timestamp: new Date().toISOString(),
+        answerDetails,
+        durationSeconds: examState.endTime ? Math.round((examState.endTime - (examState.startTime || 0)) / 1000) : 0
+      };
+
+      await api.addResult(result);
+      await api.updateExamState(auth.student.id, { submitted: true });
+      navigate('/result', { state: { resultId: result.id }, replace: true });
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      console.error("Submit error:", errorMsg);
+      alert(`Failed to submit exam: ${errorMsg}`);
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [examState, auth.student, isSubmitting, navigate, questions]);
+
+  const loadReview = useCallback(async () => {
     if (!auth.student) {
       navigate('/login');
       return;
@@ -108,11 +105,11 @@ const Review = () => {
     } finally {
         setIsLoading(false);
     }
-  };
+  }, [auth.student, navigate]);
 
   useEffect(() => {
     loadReview();
-  }, [auth.student]);
+  }, [loadReview]);
 
   useEffect(() => {
     if (!examState?.endTime) return;
@@ -131,72 +128,6 @@ const Review = () => {
     const timerId = setInterval(calculateTime, 1000);
     return () => clearInterval(timerId);
   }, [examState, isSubmitting, submitExam]);
-
-  const submitExam = useCallback(async () => {
-    if (!examState || !auth.student || isSubmitting) return;
-    setIsSubmitting(true);
-    
-    try {
-        const { correct, wrong, score } = calculateScore(questions, examState.answers);
-        
-        // Build answer details for analysis
-        const answerDetails: AnswerDetail[] = questions.map(q => {
-          const studentAnswer = examState.answers[q.id];
-          let correctAnswer: any;
-          let isCorrect = false;
-
-          if (q.type === 'pilihan_ganda') {
-            correctAnswer = q.correct_answer;
-            isCorrect = studentAnswer === q.correct_answer;
-          } else if (q.type === 'pilihan_ganda_kompleks') {
-            const selectedIndices = (studentAnswer as number[]) || [];
-            const correctIndices = q.statements?.map((s, i) => s.isCorrect ? i : -1).filter(i => i !== -1) || [];
-            correctAnswer = correctIndices;
-            isCorrect = selectedIndices.length === correctIndices.length && 
-                        selectedIndices.every(i => correctIndices.includes(i));
-          } else if (q.type === 'multiple_choice_multiple_answer') {
-            const statementAnswers = (studentAnswer as Record<number, string>) || {};
-            correctAnswer = q.statements?.map(s => s.correctAnswer) || [];
-            isCorrect = q.statements?.every((s, i) => statementAnswers[i] === s.correctAnswer);
-          }
-
-          return {
-            questionId: q.id,
-            question: q.question,
-            type: q.type,
-            studentAnswer: studentAnswer || null,
-            correctAnswer,
-            isCorrect,
-            subject: q.subject
-          };
-        });
-        
-        const result: Result = {
-          id: 'RES-' + Math.random().toString(36).substring(2, 9),
-          studentId: auth.student.id,
-          studentName: auth.student.name,
-          school: auth.student.school,
-          correct,
-          wrong,
-          score,
-          timestamp: new Date().toISOString(),
-          answerDetails,
-          durationSeconds: examState.endTime ? Math.round((examState.endTime - (examState.startTime || 0)) / 1000) : 0
-        };
-        
-        await api.addResult(result);
-        await api.updateExamState(auth.student.id, { submitted: true });
-        
-        // Pass resultID securely
-        navigate('/result', { state: { resultId: result.id }, replace: true });
-    } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : String(err);
-        console.error("Submit error:", errorMsg);
-        alert(`Failed to submit exam: ${errorMsg}`);
-    } finally {
-        setIsSubmitting(false);
-    }
-  }, [auth.student, examState, questions, navigate]);
 
   if (!examState || (isLoading && questions.length === 0)) {
     return (
@@ -248,13 +179,13 @@ const Review = () => {
           </div>
           
           {unansweredCount > 0 && (
-            <div className="bg-warning/10 text-warning p-4 rounded-lg mt-6 flex items-start gap-3 text-left">
-              <AlertTriangle className="flex-shrink-0 mt-1" />
-              <div>
-                <strong className="block mb-1 text-lg">You have unanswered questions!</strong>
-                <span className="font-medium">Are you sure you want to finish the exam without answering them? They will be marked as wrong.</span>
-              </div>
+          <div className="bg-warning/10 text-warning p-4 rounded-lg mt-6 flex items-start gap-3 text-left">
+            <AlertTriangle className="flex-shrink-0 mt-1" />
+            <div>
+              <strong className="block mb-1 text-lg">You have unanswered questions!</strong>
+              <span className="font-medium">Are you sure you want to finish the exam without answering them? They will be marked as wrong.</span>
             </div>
+          </div>
           )}
         </div>
 
